@@ -95,7 +95,7 @@ def configure_trainable_parameters(model: torch.nn.Module, trainable_keywords: t
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--data", default="data/mm-mix-tmdb")
+    parser.add_argument("--data", default=os.getenv("ODB_MM_MIX_DATA", "data/mm-mix-tmdb"))
     parser.add_argument("--source-data", default=os.getenv("ODB_MM_MIX_SOURCE_DATA"))
     parser.add_argument("--local-data", default=os.getenv("ODB_MM_MIX_LOCAL_DATA"))
     parser.add_argument("--force-local-copy", action=argparse.BooleanOptionalAction, default=False)

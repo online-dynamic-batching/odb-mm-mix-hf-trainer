@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -20,10 +21,11 @@ VISION_KEYS = ("pixel_values", "image_grid_thw", "image_sizes", "num_items_in_ba
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--data", default="data/mm-mix-tmdb")
-    parser.add_argument("--model", default="Qwen/Qwen2.5-VL-3B-Instruct")
+    parser.add_argument("--data", default=os.getenv("ODB_MM_MIX_DATA", "data/mm-mix-tmdb"))
+    parser.add_argument("--model", default=os.getenv("ODB_MM_MIX_MODEL", "Qwen/Qwen2.5-VL-3B-Instruct"))
     parser.add_argument("--max-length", type=int, default=4096)
     parser.add_argument("--num-samples", type=int, default=16)
+    parser.add_argument("--output", default=os.getenv("ODB_MM_MIX_INSPECT_OUTPUT"))
     parser.add_argument("--trust-remote-code", action=argparse.BooleanOptionalAction, default=True)
     return parser.parse_args()
 
@@ -85,18 +87,19 @@ def main() -> None:
             failures.append(f"image row has no vision tensors: index={row['index']} source={row['source']}")
         if row["known_vision_token_count"] and row["known_vision_label_values"] != [-100]:
             failures.append(f"vision token labels are not masked: index={row['index']}")
-    print(
-        json.dumps(
-            {
-                "model": args.model,
-                "num_records": len(dataset),
-                "vision_token_ids": sorted(vision_token_ids),
-                "inspected": rows,
-                "failures": failures,
-            },
-            indent=2,
-        )
-    )
+    payload = {
+        "model": args.model,
+        "num_records": len(dataset),
+        "vision_token_ids": sorted(vision_token_ids),
+        "inspected": rows,
+        "failures": failures,
+    }
+    text = json.dumps(payload, indent=2)
+    print(text)
+    if args.output:
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(text + "\n", encoding="utf-8")
     if failures:
         raise SystemExit(1)
 
