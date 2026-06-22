@@ -34,10 +34,17 @@ def has_image_record(record: dict[str, Any]) -> bool:
     return bool(record.get("images"))
 
 
+def raw_record_at(dataset: DirectReadMMMixDataset, index: int) -> dict[str, Any]:
+    if hasattr(dataset, "raw_record_at"):
+        return dataset.raw_record_at(index)
+    return dataset._record_at(index)
+
+
 def find_indices(dataset: DirectReadMMMixDataset, count: int) -> list[int]:
     image_indices: list[int] = []
     text_indices: list[int] = []
-    for index, record in enumerate(dataset.records):
+    for index in range(len(dataset)):
+        record = raw_record_at(dataset, index)
         if has_image_record(record):
             image_indices.append(index)
         else:
@@ -48,7 +55,7 @@ def find_indices(dataset: DirectReadMMMixDataset, count: int) -> list[int]:
 
 
 def inspect_one(dataset: DirectReadMMMixDataset, index: int, vision_token_ids: set[int]) -> dict[str, Any]:
-    record = dataset.records[index]
+    record = raw_record_at(dataset, index)
     item = dataset[index]
     collator = make_model_collator(dataset.processor)
     batch = collator([item])
