@@ -14,6 +14,7 @@ import odb
 from odb.integrations.hf import ODBTrainer, configure_trainer
 from odb_mm_mix import DirectReadMMMixDataset
 import torch
+from torch.utils.data import DataLoader
 from transformers import AutoProcessor, TrainingArguments
 
 from hf_mm_utils import make_model_collator
@@ -147,10 +148,34 @@ def make_training_args(args: argparse.Namespace) -> TrainingArguments:
     return TrainingArguments(**{k: v for k, v in common.items() if v is not None})
 
 
+def make_odb_train_dataloader(args: argparse.Namespace, dataset, collator) -> DataLoader:
+    kwargs: dict[str, Any] = {
+        "batch_size": 1,
+        "collate_fn": collator,
+        "num_workers": args.num_workers,
+        "pin_memory": torch.cuda.is_available(),
+    }
+    if args.num_workers > 0:
+        kwargs["prefetch_factor"] = args.prefetch_factor
+    return DataLoader(dataset, **kwargs)
+
+
+def validate_single_process_device_context() -> None:
+    world_size = int(os.getenv("WORLD_SIZE", "1"))
+    if world_size > 1 or not torch.cuda.is_available():
+        return
+    if torch.cuda.device_count() > 1:
+        raise SystemExit(
+            "This single-process HF Trainer example expects one visible GPU. "
+            "Set CUDA_VISIBLE_DEVICES to one device or launch with a distributed runner."
+        )
+
+
 def main() -> None:
     args = parse_args()
     os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
     torch.multiprocessing.set_sharing_strategy("file_system")
+    validate_single_process_device_context()
 
     data_path = Path(args.data)
     if args.source_data or args.local_data:
@@ -176,15 +201,16 @@ def main() -> None:
 
     dataset = DirectReadMMMixDataset(data_path, processor=processor, max_length=args.max_length)
     training_args = make_training_args(args)
+    collator = make_model_collator(processor)
     trainer = ODBTrainer(
         model=model,
         args=training_args,
         train_dataset=dataset,
-        data_collator=make_model_collator(processor),
+        data_collator=collator,
     )
 
     if args.loader == "odb":
-        train_loader = trainer.get_train_dataloader()
+        train_loader = make_odb_train_dataloader(args, dataset, collator)
         handle = odb.apply(
             train_loader,
             token_budget=args.token_budget,

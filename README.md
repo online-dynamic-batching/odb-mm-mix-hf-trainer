@@ -16,7 +16,7 @@ and demonstrates the native Trainer hook:
 
 ```text
 public MM-Mix TMDB
-  -> odb_mm_mix.DirectReadMMMixDataset
+  -> odb_mm_mix.DirectReadMMMixDataset lazy-seeks one record per __getitem__
   -> Hugging Face AutoProcessor / model
   -> transformers Trainer
   -> odb.apply(...)
@@ -52,7 +52,8 @@ python scripts/inspect_hf_processor_mm_tokens.py \
 
 This verifies that image records produce vision tensors such as `pixel_values`
 or `image_grid_thw`, and that known vision special tokens are masked out of the
-training labels when present.
+training labels when present. The inspection uses the same lazy TMDB Dataset as
+training; it does not pre-load the full record table.
 
 ## Run Real Processor Training
 
