@@ -79,6 +79,10 @@ python scripts/train_hf_trainer_real_processor.py \
   --max-steps 20
 ```
 
+For longer validation runs that will be evaluated afterwards, pass
+`--save-final-model` or set `ODB_MM_MIX_SAVE_FINAL_MODEL=1`; the short examples
+avoid saving full model weights by default.
+
 Proxy smoke path:
 
 ```bash

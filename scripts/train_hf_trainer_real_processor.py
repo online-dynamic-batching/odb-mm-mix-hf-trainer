@@ -118,7 +118,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--loss-scaling", default=os.getenv("ODB_MM_MIX_LOSS_SCALING", "exact"))
     parser.add_argument("--bf16", action=argparse.BooleanOptionalAction, default=torch.cuda.is_available())
     parser.add_argument("--fp16", action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument("--save-strategy", default="no")
+    parser.add_argument("--save-strategy", default=os.getenv("ODB_MM_MIX_SAVE_STRATEGY", "no"))
+    parser.add_argument(
+        "--save-final-model",
+        action=argparse.BooleanOptionalAction,
+        default=os.getenv("ODB_MM_MIX_SAVE_FINAL_MODEL", "0").lower() in {"1", "true", "yes", "y"},
+    )
     parser.add_argument("--logging-steps", type=int, default=10)
     parser.add_argument(
         "--trainable-keywords",
@@ -280,6 +285,9 @@ def main() -> None:
     )
     train_output = trainer.train()
     write_training_outputs(args, trainer, getattr(train_output, "metrics", {}))
+    if args.save_final_model:
+        trainer.save_model(args.output_dir)
+        processor.save_pretrained(args.output_dir)
 
 
 if __name__ == "__main__":
