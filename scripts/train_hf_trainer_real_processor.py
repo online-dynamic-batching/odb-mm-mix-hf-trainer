@@ -153,7 +153,7 @@ def make_odb_train_dataloader(args: argparse.Namespace, dataset, collator) -> Da
         "batch_size": 1,
         "collate_fn": collator,
         "num_workers": args.num_workers,
-        "pin_memory": torch.cuda.is_available(),
+        "pin_memory": False,
     }
     if args.num_workers > 0:
         kwargs["prefetch_factor"] = args.prefetch_factor
