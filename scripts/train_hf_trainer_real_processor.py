@@ -108,6 +108,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", default=os.getenv("ODB_MM_MIX_OUTPUT_DIR", "outputs/hf-trainer-real"))
     parser.add_argument("--token-budget", type=int, default=int(os.getenv("ODB_MM_MIX_TOKEN_BUDGET", "12288")))
     parser.add_argument("--buffer-size", type=int, default=int(os.getenv("ODB_MM_MIX_BUFFER_SIZE", "1024")))
+    parser.add_argument("--max-patches", type=int, default=int(os.getenv("ODB_MM_MIX_MAX_PATCHES", "0")))
     parser.add_argument("--fixed-batch-size", type=int, default=int(os.getenv("ODB_MM_MIX_FIXED_BATCH_SIZE", "1")))
     parser.add_argument("--max-length", type=int, default=int(os.getenv("ODB_MM_MIX_MAX_LENGTH", "2048")))
     parser.add_argument("--max-steps", type=int, default=int(os.getenv("ODB_MM_MIX_MAX_STEPS", "20")))
@@ -273,6 +274,7 @@ def main() -> None:
             buffer_size=args.buffer_size,
             loss_scaling=args.loss_scaling,
             join=args.join,
+            max_patches=args.max_patches,
         )
         configure_trainer(
             trainer,
@@ -293,6 +295,7 @@ def main() -> None:
                 "model": args.model,
                 "trainable_parameters": trainable,
                 "token_budget": args.token_budget if args.loader == "odb" else None,
+                "max_patches": args.max_patches if args.loader == "odb" else None,
                 "fixed_batch_size": args.fixed_batch_size if args.loader == "standard" else None,
                 "max_length": args.max_length,
                 "max_steps": args.max_steps,
