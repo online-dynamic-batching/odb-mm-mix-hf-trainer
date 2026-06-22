@@ -14,7 +14,9 @@ import odb
 from odb.integrations.hf import ODBTrainer, configure_trainer
 from odb_mm_mix import DirectReadMMMixDataset
 import torch
+import torch.distributed as dist
 from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
 from transformers import AutoProcessor, TrainingArguments
 
 from hf_mm_utils import make_model_collator
@@ -154,11 +156,23 @@ def make_training_args(args: argparse.Namespace) -> TrainingArguments:
 
 
 def make_odb_train_dataloader(args: argparse.Namespace, dataset, collator) -> DataLoader:
+    sampler = None
+    if dist.is_available() and dist.is_initialized():
+        sampler = DistributedSampler(
+            dataset,
+            num_replicas=dist.get_world_size(),
+            rank=dist.get_rank(),
+            shuffle=True,
+            seed=args.seed,
+            drop_last=False,
+        )
     kwargs: dict[str, Any] = {
         "batch_size": 1,
         "collate_fn": collator,
         "num_workers": args.num_workers,
         "pin_memory": False,
+        "sampler": sampler,
+        "shuffle": sampler is None,
     }
     if args.num_workers > 0:
         kwargs["prefetch_factor"] = args.prefetch_factor
@@ -184,6 +198,8 @@ def last_train_metrics(log_history: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def write_training_outputs(args: argparse.Namespace, trainer: ODBTrainer, train_metrics: dict[str, Any]) -> None:
+    if not trainer.is_world_process_zero():
+        return
     metrics_path = Path(args.output_dir) / f"train_metrics_{args.loader}.json"
     metrics_path.parent.mkdir(parents=True, exist_ok=True)
     log_history = trainer.state.log_history
@@ -192,10 +208,11 @@ def write_training_outputs(args: argparse.Namespace, trainer: ODBTrainer, train_
     final_metrics = dict(train_metrics)
     final_metrics.update(last_train_metrics(log_history))
     global_step = int(getattr(trainer.state, "global_step", 0) or 0)
+    world_size = dist.get_world_size() if dist.is_available() and dist.is_initialized() else 1
     if args.loader == "odb":
         emitted_samples = int(getattr(trainer.state, "total_data_step", 0) or 0)
     else:
-        emitted_samples = global_step * int(args.fixed_batch_size)
+        emitted_samples = global_step * int(args.fixed_batch_size) * int(world_size)
     train_runtime = float(final_metrics.get("train_runtime") or 0.0)
     summary = {
         "loader": args.loader,
@@ -204,6 +221,7 @@ def write_training_outputs(args: argparse.Namespace, trainer: ODBTrainer, train_
         "mean_emitted_samples_per_step": emitted_samples / global_step if global_step else None,
         "effective_emitted_samples_per_second": emitted_samples / train_runtime if train_runtime > 0 else None,
         "trainer_metrics": final_metrics,
+        "world_size": int(world_size),
     }
     summary_path = Path(args.output_dir) / f"train_summary_{args.loader}.json"
     summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
@@ -285,7 +303,7 @@ def main() -> None:
     )
     train_output = trainer.train()
     write_training_outputs(args, trainer, getattr(train_output, "metrics", {}))
-    if args.save_final_model:
+    if args.save_final_model and trainer.is_world_process_zero():
         trainer.save_model(args.output_dir)
         processor.save_pretrained(args.output_dir)
 
