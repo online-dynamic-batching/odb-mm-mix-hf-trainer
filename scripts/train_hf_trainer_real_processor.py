@@ -171,6 +171,39 @@ def validate_single_process_device_context() -> None:
         )
 
 
+def last_train_metrics(log_history: list[dict[str, Any]]) -> dict[str, Any]:
+    for row in reversed(log_history):
+        if "train_runtime" in row:
+            return row
+    return {}
+
+
+def write_training_outputs(args: argparse.Namespace, trainer: ODBTrainer, train_metrics: dict[str, Any]) -> None:
+    metrics_path = Path(args.output_dir) / f"train_metrics_{args.loader}.json"
+    metrics_path.parent.mkdir(parents=True, exist_ok=True)
+    log_history = trainer.state.log_history
+    metrics_path.write_text(json.dumps(log_history, indent=2) + "\n", encoding="utf-8")
+
+    final_metrics = dict(train_metrics)
+    final_metrics.update(last_train_metrics(log_history))
+    global_step = int(getattr(trainer.state, "global_step", 0) or 0)
+    if args.loader == "odb":
+        emitted_samples = int(getattr(trainer.state, "total_data_step", 0) or 0)
+    else:
+        emitted_samples = global_step * int(args.fixed_batch_size)
+    train_runtime = float(final_metrics.get("train_runtime") or 0.0)
+    summary = {
+        "loader": args.loader,
+        "global_step": global_step,
+        "emitted_samples": emitted_samples,
+        "mean_emitted_samples_per_step": emitted_samples / global_step if global_step else None,
+        "effective_emitted_samples_per_second": emitted_samples / train_runtime if train_runtime > 0 else None,
+        "trainer_metrics": final_metrics,
+    }
+    summary_path = Path(args.output_dir) / f"train_summary_{args.loader}.json"
+    summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+
+
 def main() -> None:
     args = parse_args()
     os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
@@ -245,10 +278,8 @@ def main() -> None:
         ),
         flush=True,
     )
-    trainer.train()
-    metrics_path = Path(args.output_dir) / f"train_metrics_{args.loader}.json"
-    metrics_path.parent.mkdir(parents=True, exist_ok=True)
-    metrics_path.write_text(json.dumps(trainer.state.log_history, indent=2) + "\n", encoding="utf-8")
+    train_output = trainer.train()
+    write_training_outputs(args, trainer, getattr(train_output, "metrics", {}))
 
 
 if __name__ == "__main__":
