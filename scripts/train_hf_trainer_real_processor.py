@@ -15,7 +15,7 @@ from odb.integrations.hf import ODBTrainer, configure_trainer
 from odb_mm_mix import DirectReadMMMixDataset
 import torch
 import torch.distributed as dist
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from torch.utils.data.distributed import DistributedSampler
 from transformers import AutoProcessor, TrainingArguments
 
@@ -81,6 +81,21 @@ def load_model(model_name_or_path: str, *, trust_remote_code: bool, dtype: torch
         )
 
 
+def configure_processor_pixels(processor: Any, *, image_max_pixels: int | None) -> None:
+    if image_max_pixels is None or image_max_pixels <= 0:
+        return
+    targets = [processor, getattr(processor, "image_processor", None)]
+    for target in targets:
+        if target is None:
+            continue
+        for name in ("max_pixels", "image_max_pixels"):
+            if hasattr(target, name):
+                try:
+                    setattr(target, name, int(image_max_pixels))
+                except Exception:
+                    pass
+
+
 def configure_trainable_parameters(model: torch.nn.Module, trainable_keywords: tuple[str, ...]) -> int:
     if any(keyword.lower() in {"*", "all", "full"} for keyword in trainable_keywords):
         for param in model.parameters():
@@ -111,12 +126,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-patches", type=int, default=int(os.getenv("ODB_MM_MIX_MAX_PATCHES", "0")))
     parser.add_argument("--fixed-batch-size", type=int, default=int(os.getenv("ODB_MM_MIX_FIXED_BATCH_SIZE", "1")))
     parser.add_argument("--max-length", type=int, default=int(os.getenv("ODB_MM_MIX_MAX_LENGTH", "2048")))
+    parser.add_argument("--train-size", type=int, default=int(os.getenv("ODB_MM_MIX_TRAIN_SIZE", "0")))
+    parser.add_argument("--image-max-pixels", type=int, default=int(os.getenv("ODB_MM_MIX_IMAGE_MAX_PIXELS", "0")))
     parser.add_argument("--max-steps", type=int, default=int(os.getenv("ODB_MM_MIX_MAX_STEPS", "20")))
     parser.add_argument("--num-train-epochs", type=float, default=float(os.getenv("ODB_MM_MIX_EPOCHS", "1.0")))
     parser.add_argument("--num-workers", type=int, default=int(os.getenv("ODB_MM_MIX_NUM_WORKERS", "4")))
     parser.add_argument("--prefetch-factor", type=int, default=int(os.getenv("ODB_MM_MIX_PREFETCH_FACTOR", "128")))
     parser.add_argument("--lr", type=float, default=float(os.getenv("ODB_MM_MIX_LR", "1e-5")))
+    parser.add_argument("--lr-scheduler-type", default=os.getenv("ODB_MM_MIX_LR_SCHEDULER_TYPE", "cosine"))
+    parser.add_argument("--warmup-ratio", type=float, default=float(os.getenv("ODB_MM_MIX_WARMUP_RATIO", "0.03")))
+    parser.add_argument("--max-grad-norm", type=float, default=float(os.getenv("ODB_MM_MIX_MAX_GRAD_NORM", "4.0")))
     parser.add_argument("--seed", type=int, default=int(os.getenv("ODB_MM_MIX_SEED", "42")))
+    parser.add_argument("--deepspeed", default=os.getenv("ODB_MM_MIX_DEEPSPEED"))
+    parser.add_argument(
+        "--gradient-checkpointing",
+        action=argparse.BooleanOptionalAction,
+        default=os.getenv("ODB_MM_MIX_GRADIENT_CHECKPOINTING", "1").lower() in {"1", "true", "yes", "y"},
+    )
     parser.add_argument("--join", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--loss-scaling", default=os.getenv("ODB_MM_MIX_LOSS_SCALING", "exact"))
     parser.add_argument("--bf16", action=argparse.BooleanOptionalAction, default=torch.cuda.is_available())
@@ -152,8 +178,21 @@ def make_training_args(args: argparse.Namespace) -> TrainingArguments:
         "seed": args.seed,
         "bf16": args.bf16,
         "fp16": args.fp16,
+        "lr_scheduler_type": args.lr_scheduler_type,
+        "warmup_ratio": args.warmup_ratio,
+        "max_grad_norm": args.max_grad_norm,
+        "deepspeed": args.deepspeed,
+        "gradient_checkpointing": args.gradient_checkpointing,
     }
     return TrainingArguments(**{k: v for k, v in common.items() if v is not None})
+
+
+def maybe_limit_train_dataset(dataset, train_size: int):
+    if train_size <= 0:
+        return dataset
+    if train_size > len(dataset):
+        raise SystemExit(f"train_size={train_size} exceeds dataset size {len(dataset)}")
+    return Subset(dataset, range(train_size))
 
 
 def make_odb_train_dataloader(args: argparse.Namespace, dataset, collator) -> DataLoader:
@@ -246,17 +285,20 @@ def main() -> None:
 
     dtype = torch.bfloat16 if args.bf16 else torch.float16 if args.fp16 else torch.float32
     processor = AutoProcessor.from_pretrained(args.model, trust_remote_code=args.trust_remote_code, use_fast=True)
+    configure_processor_pixels(processor, image_max_pixels=args.image_max_pixels)
     model = load_model(args.model, trust_remote_code=args.trust_remote_code, dtype=dtype)
-    try:
-        model.gradient_checkpointing_enable()
-    except Exception:
-        pass
+    if args.gradient_checkpointing:
+        try:
+            model.gradient_checkpointing_enable()
+        except Exception:
+            pass
     trainable_keywords = tuple(x.strip() for x in args.trainable_keywords.split(",") if x.strip())
     trainable = configure_trainable_parameters(model, trainable_keywords)
     if trainable <= 0:
         raise SystemExit(f"No trainable parameters matched: {trainable_keywords}")
 
-    dataset = DirectReadMMMixDataset(data_path, processor=processor, max_length=args.max_length)
+    raw_dataset = DirectReadMMMixDataset(data_path, processor=processor, max_length=args.max_length)
+    dataset = maybe_limit_train_dataset(raw_dataset, args.train_size)
     training_args = make_training_args(args)
     collator = make_model_collator(processor)
     trainer = ODBTrainer(
@@ -291,6 +333,7 @@ def main() -> None:
             {
                 "loader": args.loader,
                 "data": str(data_path),
+                "raw_records": len(raw_dataset),
                 "records": len(dataset),
                 "model": args.model,
                 "trainable_parameters": trainable,
@@ -298,6 +341,9 @@ def main() -> None:
                 "max_patches": args.max_patches if args.loader == "odb" else None,
                 "fixed_batch_size": args.fixed_batch_size if args.loader == "standard" else None,
                 "max_length": args.max_length,
+                "image_max_pixels": args.image_max_pixels,
+                "deepspeed": args.deepspeed,
+                "gradient_checkpointing": args.gradient_checkpointing,
                 "max_steps": args.max_steps,
             },
             indent=2,
