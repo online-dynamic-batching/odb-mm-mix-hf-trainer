@@ -21,12 +21,30 @@ VISION_KEYS = ("pixel_values", "image_grid_thw", "image_sizes", "num_items_in_ba
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--data", default=os.getenv("ODB_MM_MIX_DATA", "data/mm-mix-tmdb"))
-    parser.add_argument("--model", default=os.getenv("ODB_MM_MIX_MODEL", "Qwen/Qwen2.5-VL-3B-Instruct"))
-    parser.add_argument("--max-length", type=int, default=4096)
+    parser.add_argument(
+        "--data", default=os.getenv("ODB_MM_MIX_DATA", "data/mm-mix-tmdb")
+    )
+    parser.add_argument(
+        "--model", default=os.getenv("ODB_MM_MIX_MODEL", "Qwen/Qwen2.5-VL-3B-Instruct")
+    )
+    parser.add_argument(
+        "--max-length",
+        type=int,
+        default=int(os.getenv("ODB_MM_MIX_MAX_LENGTH", "4096")),
+    )
+    parser.add_argument(
+        "--image-max-pixels",
+        type=int,
+        default=int(os.getenv("ODB_MM_MIX_IMAGE_MAX_PIXELS", "589824")),
+    )
     parser.add_argument("--num-samples", type=int, default=16)
     parser.add_argument("--output", default=os.getenv("ODB_MM_MIX_INSPECT_OUTPUT"))
-    parser.add_argument("--trust-remote-code", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--processor-backend", default=os.getenv("ODB_MM_MIX_PROCESSOR_BACKEND", "auto")
+    )
+    parser.add_argument(
+        "--trust-remote-code", action=argparse.BooleanOptionalAction, default=True
+    )
     return parser.parse_args()
 
 
@@ -51,10 +69,14 @@ def find_indices(dataset: DirectReadMMMixDataset, count: int) -> list[int]:
             text_indices.append(index)
         if len(image_indices) >= count and len(text_indices) >= max(1, count // 4):
             break
-    return (image_indices[:count] + text_indices[: max(1, count // 4)])[: count + max(1, count // 4)]
+    return (image_indices[:count] + text_indices[: max(1, count // 4)])[
+        : count + max(1, count // 4)
+    ]
 
 
-def inspect_one(dataset: DirectReadMMMixDataset, index: int, vision_token_ids: set[int]) -> dict[str, Any]:
+def inspect_one(
+    dataset: DirectReadMMMixDataset, index: int, vision_token_ids: set[int]
+) -> dict[str, Any]:
     record = raw_record_at(dataset, index)
     item = dataset[index]
     collator = make_model_collator(dataset.processor)
@@ -64,8 +86,16 @@ def inspect_one(dataset: DirectReadMMMixDataset, index: int, vision_token_ids: s
     vision_positions = torch.zeros_like(input_ids, dtype=torch.bool)
     for token_id in vision_token_ids:
         vision_positions |= input_ids == int(token_id)
-    vision_label_values = labels[vision_positions].unique().detach().cpu().tolist() if vision_positions.any() else []
-    vision_keys = {key: tensor_summary(batch.get(key)) for key in VISION_KEYS if tensor_summary(batch.get(key))}
+    vision_label_values = (
+        labels[vision_positions].unique().detach().cpu().tolist()
+        if vision_positions.any()
+        else []
+    )
+    vision_keys = {
+        key: tensor_summary(batch.get(key))
+        for key in VISION_KEYS
+        if tensor_summary(batch.get(key))
+    }
     return {
         "index": index,
         "source": record.get("source"),
@@ -82,8 +112,16 @@ def inspect_one(dataset: DirectReadMMMixDataset, index: int, vision_token_ids: s
 
 def main() -> None:
     args = parse_args()
-    processor = AutoProcessor.from_pretrained(args.model, trust_remote_code=args.trust_remote_code, use_fast=True)
-    dataset = DirectReadMMMixDataset(Path(args.data), processor=processor, max_length=args.max_length)
+    processor = AutoProcessor.from_pretrained(
+        args.model, trust_remote_code=args.trust_remote_code, use_fast=True
+    )
+    dataset = DirectReadMMMixDataset(
+        Path(args.data),
+        processor=processor,
+        max_length=args.max_length,
+        image_max_pixels=args.image_max_pixels if args.image_max_pixels > 0 else None,
+        processor_backend=args.processor_backend,
+    )
     vision_token_ids = collect_vision_token_ids(processor)
     indices = find_indices(dataset, args.num_samples)
     rows = [inspect_one(dataset, index, vision_token_ids) for index in indices]
@@ -91,11 +129,18 @@ def main() -> None:
     failures = []
     for row in image_rows:
         if not row["vision_tensors"]:
-            failures.append(f"image row has no vision tensors: index={row['index']} source={row['source']}")
-        if row["known_vision_token_count"] and row["known_vision_label_values"] != [-100]:
+            failures.append(
+                f"image row has no vision tensors: index={row['index']} source={row['source']}"
+            )
+        if row["known_vision_token_count"] and row["known_vision_label_values"] != [
+            -100
+        ]:
             failures.append(f"vision token labels are not masked: index={row['index']}")
     payload = {
         "model": args.model,
+        "processor_backend": args.processor_backend,
+        "max_length": args.max_length,
+        "image_max_pixels": args.image_max_pixels,
         "num_records": len(dataset),
         "vision_token_ids": sorted(vision_token_ids),
         "inspected": rows,

@@ -31,12 +31,18 @@ def collect_vision_token_ids(processor: Any) -> set[int]:
                 token_id = tokenizer.convert_tokens_to_ids(token)
             except Exception:
                 continue
-            if isinstance(token_id, int) and token_id >= 0 and token_id != getattr(tokenizer, "unk_token_id", None):
+            if (
+                isinstance(token_id, int)
+                and token_id >= 0
+                and token_id != getattr(tokenizer, "unk_token_id", None)
+            ):
                 ids.add(token_id)
     return ids
 
 
-def mask_vision_tokens(batch: dict[str, Any], vision_token_ids: set[int]) -> dict[str, Any]:
+def mask_vision_tokens(
+    batch: dict[str, Any], vision_token_ids: set[int]
+) -> dict[str, Any]:
     """Mask known vision special tokens in labels if they are present."""
     input_ids = batch.get("input_ids")
     labels = batch.get("labels")
@@ -47,7 +53,9 @@ def mask_vision_tokens(batch: dict[str, Any], vision_token_ids: set[int]) -> dic
     return batch
 
 
-def make_model_collator(processor: Any) -> Callable[[list[dict[str, Any]]], dict[str, Any]]:
+def make_model_collator(
+    processor: Any,
+) -> Callable[[list[dict[str, Any]]], dict[str, Any]]:
     """Return a collator whose output can be passed directly to HF VLM models."""
     vision_token_ids = collect_vision_token_ids(processor)
 
@@ -67,4 +75,3 @@ def tensor_summary(value: Any) -> dict[str, Any] | None:
         "dtype": str(value.dtype),
         "numel": int(value.numel()),
     }
-

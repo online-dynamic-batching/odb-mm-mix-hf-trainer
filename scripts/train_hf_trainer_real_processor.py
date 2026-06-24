@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import odb
-from odb.integrations.hf import ODBTrainer, configure_trainer
+from odb.integrations.hf import ODBTrainer, configure_trainer, enable_odb
 from odb_mm_mix import DirectReadMMMixDataset
 import torch
 import torch.distributed as dist
@@ -26,7 +26,9 @@ def count_records(path: Path) -> int:
     metadata = path / "metadata.json"
     if metadata.exists():
         try:
-            return int(json.loads(metadata.read_text(encoding="utf-8")).get("num_records") or 0)
+            return int(
+                json.loads(metadata.read_text(encoding="utf-8")).get("num_records") or 0
+            )
         except Exception:
             pass
     records = path / "records.jsonl"
@@ -96,7 +98,9 @@ def configure_processor_pixels(processor: Any, *, image_max_pixels: int | None) 
                     pass
 
 
-def configure_trainable_parameters(model: torch.nn.Module, trainable_keywords: tuple[str, ...]) -> int:
+def configure_trainable_parameters(
+    model: torch.nn.Module, trainable_keywords: tuple[str, ...]
+) -> int:
     if any(keyword.lower() in {"*", "all", "full"} for keyword in trainable_keywords):
         for param in model.parameters():
             param.requires_grad_(True)
@@ -113,45 +117,142 @@ def configure_trainable_parameters(model: torch.nn.Module, trainable_keywords: t
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--data", default=os.getenv("ODB_MM_MIX_DATA", "data/mm-mix-tmdb"))
+    parser.add_argument(
+        "--data", default=os.getenv("ODB_MM_MIX_DATA", "data/mm-mix-tmdb")
+    )
     parser.add_argument("--source-data", default=os.getenv("ODB_MM_MIX_SOURCE_DATA"))
     parser.add_argument("--local-data", default=os.getenv("ODB_MM_MIX_LOCAL_DATA"))
-    parser.add_argument("--force-local-copy", action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument("--model", default=os.getenv("ODB_MM_MIX_MODEL", "Qwen/Qwen2.5-VL-3B-Instruct"))
-    parser.add_argument("--trust-remote-code", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--loader", choices=["odb", "standard"], default=os.getenv("ODB_MM_MIX_LOADER", "odb"))
-    parser.add_argument("--output-dir", default=os.getenv("ODB_MM_MIX_OUTPUT_DIR", "outputs/hf-trainer-real"))
-    parser.add_argument("--token-budget", type=int, default=int(os.getenv("ODB_MM_MIX_TOKEN_BUDGET", "12288")))
-    parser.add_argument("--buffer-size", type=int, default=int(os.getenv("ODB_MM_MIX_BUFFER_SIZE", "1024")))
-    parser.add_argument("--max-patches", type=int, default=int(os.getenv("ODB_MM_MIX_MAX_PATCHES", "0")))
-    parser.add_argument("--fixed-batch-size", type=int, default=int(os.getenv("ODB_MM_MIX_FIXED_BATCH_SIZE", "1")))
-    parser.add_argument("--max-length", type=int, default=int(os.getenv("ODB_MM_MIX_MAX_LENGTH", "2048")))
-    parser.add_argument("--train-size", type=int, default=int(os.getenv("ODB_MM_MIX_TRAIN_SIZE", "0")))
-    parser.add_argument("--image-max-pixels", type=int, default=int(os.getenv("ODB_MM_MIX_IMAGE_MAX_PIXELS", "0")))
-    parser.add_argument("--max-steps", type=int, default=int(os.getenv("ODB_MM_MIX_MAX_STEPS", "20")))
-    parser.add_argument("--num-train-epochs", type=float, default=float(os.getenv("ODB_MM_MIX_EPOCHS", "1.0")))
-    parser.add_argument("--num-workers", type=int, default=int(os.getenv("ODB_MM_MIX_NUM_WORKERS", "4")))
-    parser.add_argument("--prefetch-factor", type=int, default=int(os.getenv("ODB_MM_MIX_PREFETCH_FACTOR", "128")))
-    parser.add_argument("--lr", type=float, default=float(os.getenv("ODB_MM_MIX_LR", "1e-5")))
-    parser.add_argument("--lr-scheduler-type", default=os.getenv("ODB_MM_MIX_LR_SCHEDULER_TYPE", "cosine"))
-    parser.add_argument("--warmup-ratio", type=float, default=float(os.getenv("ODB_MM_MIX_WARMUP_RATIO", "0.03")))
-    parser.add_argument("--max-grad-norm", type=float, default=float(os.getenv("ODB_MM_MIX_MAX_GRAD_NORM", "4.0")))
-    parser.add_argument("--seed", type=int, default=int(os.getenv("ODB_MM_MIX_SEED", "42")))
+    parser.add_argument(
+        "--force-local-copy", action=argparse.BooleanOptionalAction, default=False
+    )
+    parser.add_argument(
+        "--model", default=os.getenv("ODB_MM_MIX_MODEL", "Qwen/Qwen2.5-VL-3B-Instruct")
+    )
+    parser.add_argument(
+        "--trust-remote-code", action=argparse.BooleanOptionalAction, default=True
+    )
+    parser.add_argument(
+        "--loader",
+        choices=["odb", "standard"],
+        default=os.getenv("ODB_MM_MIX_LOADER", "odb"),
+    )
+    parser.add_argument(
+        "--output-dir",
+        default=os.getenv("ODB_MM_MIX_OUTPUT_DIR", "outputs/hf-trainer-real"),
+    )
+    parser.add_argument(
+        "--token-budget",
+        type=int,
+        default=int(os.getenv("ODB_MM_MIX_TOKEN_BUDGET", "12288")),
+    )
+    parser.add_argument(
+        "--buffer-size",
+        type=int,
+        default=int(os.getenv("ODB_MM_MIX_BUFFER_SIZE", "1024")),
+    )
+    parser.add_argument(
+        "--max-patches", type=int, default=int(os.getenv("ODB_MM_MIX_MAX_PATCHES", "0"))
+    )
+    parser.add_argument(
+        "--fixed-batch-size",
+        type=int,
+        default=int(os.getenv("ODB_MM_MIX_FIXED_BATCH_SIZE", "1")),
+    )
+    parser.add_argument(
+        "--max-length",
+        type=int,
+        default=int(os.getenv("ODB_MM_MIX_MAX_LENGTH", "2048")),
+    )
+    parser.add_argument(
+        "--train-size", type=int, default=int(os.getenv("ODB_MM_MIX_TRAIN_SIZE", "0"))
+    )
+    parser.add_argument(
+        "--image-max-pixels",
+        type=int,
+        default=int(os.getenv("ODB_MM_MIX_IMAGE_MAX_PIXELS", "589824")),
+        help="Downscale images above this pixel budget before Qwen-VL vision-token expansion; set 0 to disable.",
+    )
+    parser.add_argument(
+        "--processor-backend",
+        choices=[
+            "auto",
+            "qwen_vl",
+            "qwen3_vl",
+            "llamafactory_qwen_vl",
+            "generic",
+            "hf",
+            "processor",
+        ],
+        default=os.getenv("ODB_MM_MIX_PROCESSOR_BACKEND", "auto"),
+        help="Runtime multimodal processor path. 'auto' uses the Qwen-VL LLaMA-Factory-style path when available.",
+    )
+    parser.add_argument(
+        "--max-steps", type=int, default=int(os.getenv("ODB_MM_MIX_MAX_STEPS", "20"))
+    )
+    parser.add_argument(
+        "--num-train-epochs",
+        type=float,
+        default=float(os.getenv("ODB_MM_MIX_EPOCHS", "1.0")),
+    )
+    parser.add_argument(
+        "--num-workers", type=int, default=int(os.getenv("ODB_MM_MIX_NUM_WORKERS", "4"))
+    )
+    parser.add_argument(
+        "--prefetch-factor",
+        type=int,
+        default=int(os.getenv("ODB_MM_MIX_PREFETCH_FACTOR", "128")),
+    )
+    parser.add_argument(
+        "--lr", type=float, default=float(os.getenv("ODB_MM_MIX_LR", "1e-5"))
+    )
+    parser.add_argument(
+        "--lr-scheduler-type",
+        default=os.getenv("ODB_MM_MIX_LR_SCHEDULER_TYPE", "cosine"),
+    )
+    parser.add_argument(
+        "--warmup-ratio",
+        type=float,
+        default=float(os.getenv("ODB_MM_MIX_WARMUP_RATIO", "0.03")),
+    )
+    parser.add_argument(
+        "--max-grad-norm",
+        type=float,
+        default=float(os.getenv("ODB_MM_MIX_MAX_GRAD_NORM", "4.0")),
+    )
+    parser.add_argument(
+        "--seed", type=int, default=int(os.getenv("ODB_MM_MIX_SEED", "42"))
+    )
     parser.add_argument("--deepspeed", default=os.getenv("ODB_MM_MIX_DEEPSPEED"))
     parser.add_argument(
         "--gradient-checkpointing",
         action=argparse.BooleanOptionalAction,
-        default=os.getenv("ODB_MM_MIX_GRADIENT_CHECKPOINTING", "1").lower() in {"1", "true", "yes", "y"},
+        default=os.getenv("ODB_MM_MIX_GRADIENT_CHECKPOINTING", "1").lower()
+        in {"1", "true", "yes", "y"},
     )
     parser.add_argument("--join", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--loss-scaling", default=os.getenv("ODB_MM_MIX_LOSS_SCALING", "exact"))
-    parser.add_argument("--bf16", action=argparse.BooleanOptionalAction, default=torch.cuda.is_available())
+    parser.add_argument(
+        "--loss-scaling", default=os.getenv("ODB_MM_MIX_LOSS_SCALING", "exact")
+    )
+    parser.add_argument(
+        "--odb-integration",
+        choices=["enable", "manual"],
+        default=os.getenv("ODB_MM_MIX_ODB_INTEGRATION", "enable"),
+        help="Use the high-level enable_odb hook or the lower-level manual odb.apply + configure_trainer path.",
+    )
+    parser.add_argument(
+        "--bf16",
+        action=argparse.BooleanOptionalAction,
+        default=torch.cuda.is_available(),
+    )
     parser.add_argument("--fp16", action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument("--save-strategy", default=os.getenv("ODB_MM_MIX_SAVE_STRATEGY", "no"))
+    parser.add_argument(
+        "--save-strategy", default=os.getenv("ODB_MM_MIX_SAVE_STRATEGY", "no")
+    )
     parser.add_argument(
         "--save-final-model",
         action=argparse.BooleanOptionalAction,
-        default=os.getenv("ODB_MM_MIX_SAVE_FINAL_MODEL", "0").lower() in {"1", "true", "yes", "y"},
+        default=os.getenv("ODB_MM_MIX_SAVE_FINAL_MODEL", "0").lower()
+        in {"1", "true", "yes", "y"},
     )
     parser.add_argument("--logging-steps", type=int, default=10)
     parser.add_argument(
@@ -165,9 +266,13 @@ def parse_args() -> argparse.Namespace:
 def make_training_args(args: argparse.Namespace) -> TrainingArguments:
     common: dict[str, Any] = {
         "output_dir": args.output_dir,
-        "per_device_train_batch_size": 1 if args.loader == "odb" else args.fixed_batch_size,
+        "per_device_train_batch_size": 1
+        if args.loader == "odb"
+        else args.fixed_batch_size,
         "dataloader_num_workers": args.num_workers,
-        "dataloader_prefetch_factor": args.prefetch_factor if args.num_workers > 0 else None,
+        "dataloader_prefetch_factor": args.prefetch_factor
+        if args.num_workers > 0
+        else None,
         "learning_rate": args.lr,
         "num_train_epochs": args.num_train_epochs,
         "max_steps": args.max_steps,
@@ -195,7 +300,9 @@ def maybe_limit_train_dataset(dataset, train_size: int):
     return Subset(dataset, range(train_size))
 
 
-def make_odb_train_dataloader(args: argparse.Namespace, dataset, collator) -> DataLoader:
+def make_odb_train_dataloader(
+    args: argparse.Namespace, dataset, collator
+) -> DataLoader:
     sampler = None
     if dist.is_available() and dist.is_initialized():
         sampler = DistributedSampler(
@@ -237,7 +344,9 @@ def last_train_metrics(log_history: list[dict[str, Any]]) -> dict[str, Any]:
     return {}
 
 
-def write_training_outputs(args: argparse.Namespace, trainer: ODBTrainer, train_metrics: dict[str, Any]) -> None:
+def write_training_outputs(
+    args: argparse.Namespace, trainer: ODBTrainer, train_metrics: dict[str, Any]
+) -> None:
     if not trainer.is_world_process_zero():
         return
     metrics_path = Path(args.output_dir) / f"train_metrics_{args.loader}.json"
@@ -248,7 +357,9 @@ def write_training_outputs(args: argparse.Namespace, trainer: ODBTrainer, train_
     final_metrics = dict(train_metrics)
     final_metrics.update(last_train_metrics(log_history))
     global_step = int(getattr(trainer.state, "global_step", 0) or 0)
-    world_size = dist.get_world_size() if dist.is_available() and dist.is_initialized() else 1
+    world_size = (
+        dist.get_world_size() if dist.is_available() and dist.is_initialized() else 1
+    )
     if args.loader == "odb":
         emitted_samples = int(getattr(trainer.state, "total_data_step", 0) or 0)
     else:
@@ -258,8 +369,12 @@ def write_training_outputs(args: argparse.Namespace, trainer: ODBTrainer, train_
         "loader": args.loader,
         "global_step": global_step,
         "emitted_samples": emitted_samples,
-        "mean_emitted_samples_per_step": emitted_samples / global_step if global_step else None,
-        "effective_emitted_samples_per_second": emitted_samples / train_runtime if train_runtime > 0 else None,
+        "mean_emitted_samples_per_step": emitted_samples / global_step
+        if global_step
+        else None,
+        "effective_emitted_samples_per_second": emitted_samples / train_runtime
+        if train_runtime > 0
+        else None,
         "trainer_metrics": final_metrics,
         "world_size": int(world_size),
     }
@@ -283,21 +398,35 @@ def main() -> None:
     if count_records(data_path) <= 0:
         raise SystemExit(f"No records found in {data_path}")
 
-    dtype = torch.bfloat16 if args.bf16 else torch.float16 if args.fp16 else torch.float32
-    processor = AutoProcessor.from_pretrained(args.model, trust_remote_code=args.trust_remote_code, use_fast=True)
+    dtype = (
+        torch.bfloat16 if args.bf16 else torch.float16 if args.fp16 else torch.float32
+    )
+    processor = AutoProcessor.from_pretrained(
+        args.model, trust_remote_code=args.trust_remote_code, use_fast=True
+    )
     configure_processor_pixels(processor, image_max_pixels=args.image_max_pixels)
-    model = load_model(args.model, trust_remote_code=args.trust_remote_code, dtype=dtype)
+    model = load_model(
+        args.model, trust_remote_code=args.trust_remote_code, dtype=dtype
+    )
     if args.gradient_checkpointing:
         try:
             model.gradient_checkpointing_enable()
         except Exception:
             pass
-    trainable_keywords = tuple(x.strip() for x in args.trainable_keywords.split(",") if x.strip())
+    trainable_keywords = tuple(
+        x.strip() for x in args.trainable_keywords.split(",") if x.strip()
+    )
     trainable = configure_trainable_parameters(model, trainable_keywords)
     if trainable <= 0:
         raise SystemExit(f"No trainable parameters matched: {trainable_keywords}")
 
-    raw_dataset = DirectReadMMMixDataset(data_path, processor=processor, max_length=args.max_length)
+    raw_dataset = DirectReadMMMixDataset(
+        data_path,
+        processor=processor,
+        max_length=args.max_length,
+        image_max_pixels=args.image_max_pixels if args.image_max_pixels > 0 else None,
+        processor_backend=args.processor_backend,
+    )
     dataset = maybe_limit_train_dataset(raw_dataset, args.train_size)
     training_args = make_training_args(args)
     collator = make_model_collator(processor)
@@ -310,23 +439,40 @@ def main() -> None:
 
     if args.loader == "odb":
         train_loader = make_odb_train_dataloader(args, dataset, collator)
-        handle = odb.apply(
-            train_loader,
-            token_budget=args.token_budget,
-            buffer_size=args.buffer_size,
-            loss_scaling=args.loss_scaling,
-            join=args.join,
-            max_patches=args.max_patches,
-        )
-        configure_trainer(
-            trainer,
-            dataloader=train_loader,
-            handle=handle,
-            sample_budget=len(dataset),
-            max_optimizer_steps=args.max_steps if args.max_steps > 0 else None,
-            max_steps_policy="overwrite",
-            scheduler_progress="samples",
-        )
+        max_optimizer_steps = args.max_steps if args.max_steps > 0 else None
+        if args.odb_integration == "manual":
+            handle = odb.apply(
+                train_loader,
+                token_budget=args.token_budget,
+                buffer_size=args.buffer_size,
+                loss_scaling=args.loss_scaling,
+                join=args.join,
+                max_patches=args.max_patches,
+            )
+            configure_trainer(
+                trainer,
+                dataloader=train_loader,
+                handle=handle,
+                sample_budget=len(dataset),
+                max_optimizer_steps=max_optimizer_steps,
+                max_steps_policy="overwrite",
+                scheduler_progress="samples",
+            )
+        else:
+            enable_odb(
+                trainer,
+                train_dataloader=train_loader,
+                train_dataset=dataset,
+                sample_budget=len(dataset),
+                token_budget=args.token_budget,
+                buffer_size=args.buffer_size,
+                loss_scaling=args.loss_scaling,
+                join=args.join,
+                max_patches=args.max_patches,
+                max_optimizer_steps=max_optimizer_steps,
+                max_steps_policy="overwrite",
+                scheduler_progress="samples",
+            )
 
     print(
         json.dumps(
@@ -339,12 +485,18 @@ def main() -> None:
                 "trainable_parameters": trainable,
                 "token_budget": args.token_budget if args.loader == "odb" else None,
                 "max_patches": args.max_patches if args.loader == "odb" else None,
-                "fixed_batch_size": args.fixed_batch_size if args.loader == "standard" else None,
+                "fixed_batch_size": args.fixed_batch_size
+                if args.loader == "standard"
+                else None,
                 "max_length": args.max_length,
                 "image_max_pixels": args.image_max_pixels,
+                "processor_backend": args.processor_backend,
                 "deepspeed": args.deepspeed,
                 "gradient_checkpointing": args.gradient_checkpointing,
                 "max_steps": args.max_steps,
+                "odb_integration": args.odb_integration
+                if args.loader == "odb"
+                else None,
             },
             indent=2,
         ),
