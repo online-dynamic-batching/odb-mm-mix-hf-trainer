@@ -85,13 +85,33 @@ develop or audit a framework-native HF processor pipeline.
 
 ## Run Real Processor Training
 
-Real processor path:
+For strict train/eval accounting, use the same deterministic split policy for
+training and validation loss. The LLaMA-Factory-compatible policy is:
+
+```text
+split_mode = lf_val_size
+val_size = 0.05
+split_seed = 42
+train = permutation[val_size:]
+eval = permutation[:val_size]
+```
+
+The older prefix mode (`--split-mode prefix --train-size N`) is useful for
+quick debugging, but then validation must use a held-out tail range. Do not
+evaluate a prefix-trained checkpoint on `lf_val_size` and call it held-out
+validation loss, because most `lf_val_size` examples were already seen during
+prefix training.
+
+Real processor path with ODB:
 
 ```bash
 python scripts/train_hf_trainer_real_processor.py \
   --data data/mm-mix-tmdb \
   --model Qwen/Qwen2.5-VL-3B-Instruct \
   --loader odb \
+  --split-mode lf_val_size \
+  --val-size 0.05 \
+  --split-seed 42 \
   --token-budget 8192 \
   --image-max-pixels 589824 \
   --max-steps 20
@@ -119,6 +139,9 @@ python scripts/train_hf_trainer_real_processor.py \
   --data data/mm-mix-tmdb \
   --model Qwen/Qwen2.5-VL-3B-Instruct \
   --loader standard \
+  --split-mode lf_val_size \
+  --val-size 0.05 \
+  --split-seed 42 \
   --fixed-batch-size 1 \
   --image-max-pixels 589824 \
   --max-steps 20
@@ -144,3 +167,31 @@ processing and should not be used for quality or throughput comparisons.
 For real model training, keep your existing model forward path. The key ODB
 change is to make the Dataset return single-sample tensor dicts before
 grouping, then call `enable_odb(...)` on the Trainer and DataLoader.
+
+## Evaluate Saved Checkpoints
+
+Validation loss uses the same lazy HF-direct processor path as training. Use
+`lf_val_size` only for checkpoints trained with the matching split:
+
+```bash
+python scripts/eval_hf_valloss.py \
+  --checkpoint outputs/hf-trainer-real \
+  --data data/mm-mix-tmdb \
+  --output-dir outputs/hf-trainer-real/eval_out_hf_valloss \
+  --split-mode lf_val_size \
+  --val-size 0.05 \
+  --split-seed 42
+```
+
+The output JSON includes `eval_indices_preview`, `label_tokens`,
+`label_tokens_per_sample`, and `token_weighted_eval_loss` so you can audit
+whether the validation split and label mask are comparable across runs.
+
+MMMU-MC evaluation reuses the paper evaluator from a local LLaMA-Factory
+checkout:
+
+```bash
+ODB_HF_EVAL_CHECKPOINT=outputs/hf-trainer-real \
+ODB_HF_EVAL_SAVE_DIR=outputs/hf-trainer-real/mmmu_mc_likelihood_hf \
+python local_validation/run_hf_mmmu_eval_h20.py
+```

@@ -167,6 +167,24 @@ def parse_args() -> argparse.Namespace:
         "--train-size", type=int, default=int(os.getenv("ODB_MM_MIX_TRAIN_SIZE", "0"))
     )
     parser.add_argument(
+        "--split-mode",
+        choices=["prefix", "lf_val_size"],
+        default=os.getenv("ODB_MM_MIX_SPLIT_MODE", "prefix"),
+        help="Training split. `lf_val_size` matches LLaMA-Factory TMDB val_size splitting and trains on the complement.",
+    )
+    parser.add_argument(
+        "--val-size",
+        type=float,
+        default=float(os.getenv("ODB_MM_MIX_VAL_SIZE", "0.05")),
+        help="Validation size held out from training when --split-mode=lf_val_size.",
+    )
+    parser.add_argument(
+        "--split-seed",
+        type=int,
+        default=int(os.getenv("ODB_MM_MIX_SPLIT_SEED", "42")),
+        help="Seed used when --split-mode=lf_val_size.",
+    )
+    parser.add_argument(
         "--image-max-pixels",
         type=int,
         default=int(os.getenv("ODB_MM_MIX_IMAGE_MAX_PIXELS", "589824")),
@@ -292,12 +310,54 @@ def make_training_args(args: argparse.Namespace) -> TrainingArguments:
     return TrainingArguments(**{k: v for k, v in common.items() if v is not None})
 
 
-def maybe_limit_train_dataset(dataset, train_size: int):
-    if train_size <= 0:
-        return dataset
-    if train_size > len(dataset):
-        raise SystemExit(f"train_size={train_size} exceeds dataset size {len(dataset)}")
-    return Subset(dataset, range(train_size))
+def build_train_indices(
+    args: argparse.Namespace, dataset_len: int
+) -> tuple[list[int], dict[str, Any]]:
+    if args.split_mode == "prefix":
+        if args.train_size <= 0:
+            indices = list(range(dataset_len))
+        else:
+            if args.train_size > dataset_len:
+                raise SystemExit(
+                    f"train_size={args.train_size} exceeds dataset size {dataset_len}"
+                )
+            indices = list(range(args.train_size))
+        return indices, {
+            "split_mode": "prefix",
+            "train_size_arg": args.train_size,
+            "val_size": None,
+            "split_seed": None,
+            "train_indices_preview": indices[:10],
+            "eval_indices_preview": None,
+        }
+
+    if args.val_size <= 0:
+        raise SystemExit("--val-size must be positive for --split-mode=lf_val_size")
+
+    import numpy as np
+
+    val_size = (
+        int(args.val_size) if args.val_size > 1 else int(dataset_len * args.val_size)
+    )
+    val_size = max(1, min(val_size, dataset_len - 1))
+    rng = np.random.default_rng(args.split_seed)
+    perm = rng.permutation(dataset_len).tolist()
+    eval_indices = [int(index) for index in perm[:val_size]]
+    train_indices = [int(index) for index in perm[val_size:]]
+    if args.train_size > 0:
+        if args.train_size > len(train_indices):
+            raise SystemExit(
+                f"train_size={args.train_size} exceeds LF-split train size {len(train_indices)}"
+            )
+        train_indices = train_indices[: args.train_size]
+    return train_indices, {
+        "split_mode": "lf_val_size",
+        "train_size_arg": args.train_size,
+        "val_size": args.val_size,
+        "split_seed": args.split_seed,
+        "train_indices_preview": train_indices[:10],
+        "eval_indices_preview": eval_indices[:10],
+    }
 
 
 def make_odb_train_dataloader(
@@ -377,6 +437,7 @@ def write_training_outputs(
         else None,
         "trainer_metrics": final_metrics,
         "world_size": int(world_size),
+        "split": getattr(args, "split_info", None),
     }
     summary_path = Path(args.output_dir) / f"train_summary_{args.loader}.json"
     summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
@@ -428,7 +489,9 @@ def main() -> None:
         image_max_pixels=args.image_max_pixels if args.image_max_pixels > 0 else None,
         processor_backend=args.processor_backend,
     )
-    dataset = maybe_limit_train_dataset(raw_dataset, args.train_size)
+    train_indices, split_info = build_train_indices(args, len(raw_dataset))
+    args.split_info = split_info
+    dataset = Subset(raw_dataset, train_indices)
     training_args = make_training_args(args)
     collator = make_model_collator(processor)
     trainer = ODBTrainer(
@@ -482,6 +545,7 @@ def main() -> None:
                 "data": str(data_path),
                 "raw_records": len(raw_dataset),
                 "records": len(dataset),
+                **split_info,
                 "model": args.model,
                 "trainable_parameters": trainable,
                 "token_budget": args.token_budget if args.loader == "odb" else None,
