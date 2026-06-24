@@ -380,6 +380,7 @@ def write_training_outputs(
     }
     summary_path = Path(args.output_dir) / f"train_summary_{args.loader}.json"
     summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+    print("[odb-mm-mix-summary] " + json.dumps(summary, sort_keys=True), flush=True)
 
 
 def main() -> None:
