@@ -1,0 +1,95 @@
+{
+  "name": "HF-direct Qwen3-VL-2B public MM-Mix full-epoch validation",
+  "date": "2026-06-25",
+  "package": {
+    "online_dynamic_batching": "0.1.2"
+  },
+  "hardware": {
+    "nodes": 1,
+    "gpus_per_node": 8,
+    "gpu_type": "H20"
+  },
+  "model": "Qwen3-VL-2B-Instruct",
+  "data": {
+    "recipe": "public MM-Mix TMDB",
+    "raw_records": 206526,
+    "train_samples": 196200,
+    "eval_samples": 10326,
+    "split_mode": "lf_val_size",
+    "val_size": 0.05,
+    "split_seed": 42,
+    "eval_indices_preview": [
+      181883,
+      99794,
+      33835,
+      206158,
+      83991,
+      26566,
+      117602,
+      13050,
+      10114,
+      169270
+    ],
+    "label_tokens": 2741741,
+    "label_tokens_per_sample": {
+      "min": 3,
+      "p10": 6,
+      "p50": 196,
+      "p90": 644,
+      "max": 2507,
+      "mean": 265.5182064691071
+    }
+  },
+  "training": {
+    "max_length": 16384,
+    "image_max_pixels": 589824,
+    "processor_backend": "qwen_vl",
+    "epochs": 1.0,
+    "standard": {
+      "loader": "standard",
+      "run_id": "odb_hf_qwenvl_standard_full_lfsplit_012_1node_ddp8_20260624",
+      "global_step": 24525,
+      "emitted_samples": 196200,
+      "mean_emitted_samples_per_step": 8.0,
+      "effective_emitted_samples_per_second": 18.924286456981974,
+      "runtime_seconds": 10367.63,
+      "train_loss": 8.91891789427591,
+      "validation_loss": 1.0362949448321062,
+      "token_weighted_validation_loss": 1.210747236448032,
+      "mmmu_mc_accuracy": 43.41,
+      "mmmu_mc_correct": 369,
+      "mmmu_mc_total": 850
+    },
+    "odb": {
+      "loader": "odb",
+      "run_id": "odb_hf_qwenvl_odb_full_lfsplit_012_1node_ddp8_20260624",
+      "global_step": 1278,
+      "emitted_samples": 196200,
+      "mean_emitted_samples_per_step": 153.5211267605634,
+      "effective_emitted_samples_per_second": 50.53213141722977,
+      "runtime_seconds": 3882.6781,
+      "train_loss": 1.1967601880594412,
+      "validation_loss": 1.030201868857179,
+      "token_weighted_validation_loss": 1.2075467823404307,
+      "mmmu_mc_accuracy": 48.35,
+      "mmmu_mc_correct": 411,
+      "mmmu_mc_total": 850,
+      "token_budget": 12288,
+      "buffer_size": 1024,
+      "loss_scaling": "exact",
+      "join": true
+    }
+  },
+  "derived": {
+    "throughput_speedup": 2.6702265119531794,
+    "runtime_speedup": 2.67022651195318,
+    "validation_loss_delta_odb_minus_standard": -0.006093075974927142,
+    "token_weighted_validation_loss_delta_odb_minus_standard": -0.0032004541076013915,
+    "mmmu_mc_delta_points": 4.940000000000005
+  },
+  "notes": [
+    "This is a framework-native HF Trainer validation run, not a paper-aligned LLaMA-Factory reproduction.",
+    "Both loaders use the same lazy TMDB dataset, Qwen-VL processor backend, and LLaMA-Factory-compatible 5% validation split.",
+    "Validation loss uses the sample mean of the model loss; token-weighted validation loss is also reported for auditability."
+  ]
+}

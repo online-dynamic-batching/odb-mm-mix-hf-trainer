@@ -73,15 +73,22 @@ separate image-size policy.
 ## Current Validation Status
 
 The ODB/HF Trainer adapter contract is validated with ODB-ready tensor
-datasets. The raw multimodal Qwen-VL MM-Mix path in this repository is still
-under validation because native HF processor/template/label behavior is not
-identical to the LLaMA-Factory reference path. In current 8-GPU H20 diagnostics,
-the metadata path is healthy, but real full-FT training is not yet a
-paper-aligned result source.
+datasets and a full-epoch public MM-Mix H20 run using
+`online-dynamic-batching==0.1.2`. This is a framework-native HF processor path,
+not a paper-aligned LLaMA-Factory reproduction, so use the LLaMA-Factory
+MM-Mix reference project when you need the paper-style training stack.
 
-Use the LLaMA-Factory MM-Mix reference project for the validated public
-MM-Mix training example. Use this repository when you specifically want to
-develop or audit a framework-native HF processor pipeline.
+Full-epoch validation on one 8-GPU H20 node with Qwen3-VL-2B-Instruct,
+`split_mode=lf_val_size`, `val_size=0.05`, and `split_seed=42`:
+
+| Loader | Samples/s | Speedup | Runtime | Steps | Samples/step | Val loss | Token-weighted val loss | MMMU-MC |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Standard | 18.92 | 1.00x | 10367.6s | 24525 | 8.0 | 1.0363 | 1.2107 | 43.41 |
+| ODB | 50.53 | 2.67x | 3882.7s | 1278 | 153.5 | 1.0302 | 1.2075 | 48.35 |
+
+Both runs train over the same 196,200 examples and evaluate on the same 10,326
+held-out examples. The detailed machine-readable record is in
+[`results/h20_qwen3vl2b_full_lfsplit_20260625.json`](results/h20_qwen3vl2b_full_lfsplit_20260625.json).
 
 ## Run Real Processor Training
 
