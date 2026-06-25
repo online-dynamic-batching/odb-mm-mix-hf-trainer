@@ -10,6 +10,8 @@ cd "${ROOT_DIR}"
 DATA="${ODB_MM_MIX_DATA:-data/mm-mix-tmdb}"
 MODEL="${ODB_MM_MIX_MODEL:-Qwen/Qwen3-VL-2B-Instruct}"
 OUTPUT_ROOT="${ODB_MM_MIX_OUTPUT_ROOT:-outputs/hf-trainer-real}"
+EVAL_CHECKPOINT="${ODB_HF_EVAL_CHECKPOINT:-${OUTPUT_ROOT}/odb-enable}"
+EVAL_OUTPUT_ROOT="${ODB_HF_EVAL_OUTPUT_ROOT:-${EVAL_CHECKPOINT}}"
 MAX_STEPS="${ODB_MM_MIX_MAX_STEPS:-20}"
 MAX_LENGTH="${ODB_MM_MIX_MAX_LENGTH:-16384}"
 IMAGE_MAX_PIXELS="${ODB_MM_MIX_IMAGE_MAX_PIXELS:-589824}"
@@ -69,10 +71,28 @@ case "${MODE}" in
     run_train standard none "$@"
     ;;
   inspect)
-    python scripts/inspect_hf_processor_mm_tokens.py \
+    python scripts/inspect_data_pipeline.py \
       --data "${DATA}" \
       --model "${MODEL}" \
       --image-max-pixels "${IMAGE_MAX_PIXELS}" \
+      "$@"
+    ;;
+  eval-valloss|valloss)
+    python scripts/eval_valloss.py \
+      --checkpoint "${EVAL_CHECKPOINT}" \
+      --data "${DATA}" \
+      --output-dir "${EVAL_OUTPUT_ROOT}/eval_out_hf_valloss" \
+      --split-mode lf_val_size \
+      --val-size 0.05 \
+      --split-seed 42 \
+      --max-length "${MAX_LENGTH}" \
+      --image-max-pixels "${IMAGE_MAX_PIXELS}" \
+      "$@"
+    ;;
+  eval-benchmark|benchmark)
+    python scripts/eval_benchmark.py \
+      --checkpoint "${EVAL_CHECKPOINT}" \
+      --output-dir "${EVAL_OUTPUT_ROOT}/mmmu_mc_likelihood_hf" \
       "$@"
     ;;
   help|-h|--help)
@@ -85,12 +105,15 @@ Modes:
   odb-manual   Advanced ODB path: odb.apply(...) + configure_trainer(...).
   standard     Fixed-batch baseline.
   inspect      Inspect HF processor multimodal tensor output.
+  eval-valloss Evaluate validation loss for a saved checkpoint.
+  benchmark    Run the built-in MMMU-MC benchmark for a saved checkpoint.
 
 Useful environment variables:
   ODB_MM_MIX_DATA=data/mm-mix-tmdb
   ODB_MM_MIX_MODEL=Qwen/Qwen3-VL-2B-Instruct
   ODB_MM_MIX_MAX_STEPS=20
   ODB_MM_MIX_NUM_PROCESSES=8
+  ODB_HF_EVAL_CHECKPOINT=outputs/hf-trainer-real/odb-enable
 EOF
     ;;
   *)

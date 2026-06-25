@@ -25,6 +25,10 @@ which file under `scripts/` starts training.
 
 # Fixed-batch baseline
 ./run.sh standard
+
+# Evaluate a saved checkpoint
+./run.sh eval-valloss
+./run.sh benchmark
 ```
 
 `run.sh` defaults to `Qwen/Qwen3-VL-2B-Instruct`, the public MM-Mix TMDB under
@@ -36,8 +40,16 @@ full pass and `ODB_MM_MIX_NUM_PROCESSES=8` for an 8-GPU run:
 ODB_MM_MIX_MAX_STEPS=0 ODB_MM_MIX_NUM_PROCESSES=8 ./run.sh odb-enable
 ```
 
-The underlying training script is `scripts/train_hf_trainer.py`. It
-intentionally supports two ODB integration modes:
+The public scripts are intentionally named by role:
+
+| Script | Purpose |
+| --- | --- |
+| `scripts/train_hf_trainer.py` | Real HF Trainer multimodal training. |
+| `scripts/eval_valloss.py` | Validation loss on the same lazy HF-direct processor path. |
+| `scripts/eval_benchmark.py` | Built-in MMMU-MC choice-likelihood benchmark evaluator. |
+| `scripts/inspect_data_pipeline.py` | Pre-training check for multimodal tensor output and label masking. |
+
+The training script intentionally supports two ODB integration modes:
 
 | Mode | Command | What it demonstrates |
 | --- | --- | --- |
@@ -86,9 +98,9 @@ Before training, check that the framework-native HF processor path is producing
 real multimodal tensors and sane labels:
 
 ```bash
-python scripts/inspect_hf_processor_mm_tokens.py \
+python scripts/inspect_data_pipeline.py \
   --data data/mm-mix-tmdb \
-  --model Qwen/Qwen2.5-VL-3B-Instruct \
+  --model Qwen/Qwen3-VL-2B-Instruct \
   --image-max-pixels 589824 \
   --num-samples 16
 ```
@@ -194,7 +206,7 @@ Validation loss uses the same lazy HF-direct processor path as training. Use
 `lf_val_size` only for checkpoints trained with the matching split:
 
 ```bash
-python scripts/eval_hf_valloss.py \
+python scripts/eval_valloss.py \
   --checkpoint outputs/hf-trainer-real \
   --data data/mm-mix-tmdb \
   --output-dir outputs/hf-trainer-real/eval_out_hf_valloss \
@@ -207,11 +219,12 @@ The output JSON includes `eval_indices_preview`, `label_tokens`,
 `label_tokens_per_sample`, and `token_weighted_eval_loss` so you can audit
 whether the validation split and label mask are comparable across runs.
 
-MMMU-MC evaluation reuses the paper evaluator from a local LLaMA-Factory
-checkout:
+MMMU-MC evaluation is provided by this repository. It loads the public
+`MMMU/MMMU` validation split with `datasets`, scores answer letters A-H by
+next-token likelihood, and writes `mmmu_mc_likelihood_results.json`,
+`predictions.jsonl`, `excluded.jsonl`, and `score_audit.json`.
 
 ```bash
-ODB_HF_EVAL_CHECKPOINT=outputs/hf-trainer-real \
-ODB_HF_EVAL_SAVE_DIR=outputs/hf-trainer-real/mmmu_mc_likelihood_hf \
-python local_validation/run_hf_mmmu_eval_h20.py
+ODB_HF_EVAL_CHECKPOINT=outputs/hf-trainer-real/odb-enable \
+./run.sh benchmark
 ```

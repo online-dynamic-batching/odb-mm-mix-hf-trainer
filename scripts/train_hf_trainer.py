@@ -126,7 +126,7 @@ def parse_args() -> argparse.Namespace:
         "--force-local-copy", action=argparse.BooleanOptionalAction, default=False
     )
     parser.add_argument(
-        "--model", default=os.getenv("ODB_MM_MIX_MODEL", "Qwen/Qwen2.5-VL-3B-Instruct")
+        "--model", default=os.getenv("ODB_MM_MIX_MODEL", "Qwen/Qwen3-VL-2B-Instruct")
     )
     parser.add_argument(
         "--trust-remote-code", action=argparse.BooleanOptionalAction, default=True

@@ -25,7 +25,7 @@ def parse_args() -> argparse.Namespace:
         "--data", default=os.getenv("ODB_MM_MIX_DATA", "data/mm-mix-tmdb")
     )
     parser.add_argument(
-        "--model", default=os.getenv("ODB_MM_MIX_MODEL", "Qwen/Qwen2.5-VL-3B-Instruct")
+        "--model", default=os.getenv("ODB_MM_MIX_MODEL", "Qwen/Qwen3-VL-2B-Instruct")
     )
     parser.add_argument(
         "--max-length",
