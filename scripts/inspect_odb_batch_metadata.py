@@ -24,7 +24,7 @@ from torch.utils.data.distributed import DistributedSampler
 from transformers import AutoProcessor
 
 from hf_mm_utils import make_model_collator
-from train_hf_trainer_real_processor import count_records
+from train_hf_trainer import count_records
 
 
 def _scalar(value: Any) -> int | float | str | None:

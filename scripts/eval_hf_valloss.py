@@ -16,7 +16,7 @@ from tqdm import tqdm
 from transformers import AutoProcessor
 
 from hf_mm_utils import make_model_collator
-from train_hf_trainer_real_processor import (
+from train_hf_trainer import (
     configure_processor_pixels,
     load_model,
 )

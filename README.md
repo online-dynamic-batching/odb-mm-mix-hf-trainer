@@ -36,9 +36,8 @@ full pass and `ODB_MM_MIX_NUM_PROCESSES=8` for an 8-GPU run:
 ODB_MM_MIX_MAX_STEPS=0 ODB_MM_MIX_NUM_PROCESSES=8 ./run.sh odb-enable
 ```
 
-The underlying training script is
-`scripts/train_hf_trainer_real_processor.py`. It intentionally supports two
-ODB integration modes:
+The underlying training script is `scripts/train_hf_trainer.py`. It
+intentionally supports two ODB integration modes:
 
 | Mode | Command | What it demonstrates |
 | --- | --- | --- |
@@ -184,19 +183,6 @@ Run Standard with the same inputs:
 For longer validation runs that will be evaluated afterwards, pass
 `--save-final-model` or set `ODB_MM_MIX_SAVE_FINAL_MODEL=1`; the short examples
 avoid saving full model weights by default.
-
-Proxy smoke path:
-
-```bash
-python scripts/train_hf_trainer_proxy.py \
-  --data data/mm-mix-tmdb \
-  --token-budget 8192 \
-  --max-steps 100
-```
-
-The proxy script trains a tiny language model over MM-Mix record lengths. It is
-only a quick adapter smoke test; it does not validate multimodal token
-processing and should not be used for quality or throughput comparisons.
 
 For real model training, keep your existing model forward path. The key ODB
 change is to make the Dataset return single-sample tensor dicts before

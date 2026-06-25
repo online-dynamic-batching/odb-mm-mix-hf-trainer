@@ -33,7 +33,7 @@ run_train() {
   local integration="${2:-enable}"
   local output_dir="${OUTPUT_ROOT}/${loader}-${integration}"
   local cmd=(
-    python scripts/train_hf_trainer_real_processor.py
+    python scripts/train_hf_trainer.py
     "${COMMON_ARGS[@]}"
     --loader "${loader}"
     --output-dir "${output_dir}"
