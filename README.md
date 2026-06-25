@@ -10,6 +10,41 @@ This example uses the ODB pip package:
 pip install -r requirements.txt
 ```
 
+## Start Here
+
+The root entrypoint is `run.sh`. It keeps the common train/eval split and
+model-processing settings in one visible place, so you do not need to guess
+which file under `scripts/` starts training.
+
+```bash
+# Recommended ODB path: calls enable_odb(...)
+./run.sh odb-enable
+
+# Advanced ODB path: explicit odb.apply(...) + configure_trainer(...)
+./run.sh odb-manual
+
+# Fixed-batch baseline
+./run.sh standard
+```
+
+`run.sh` defaults to `Qwen/Qwen3-VL-2B-Instruct`, the public MM-Mix TMDB under
+`data/mm-mix-tmdb`, `split_mode=lf_val_size`, `val_size=0.05`, `split_seed=42`,
+and a short `ODB_MM_MIX_MAX_STEPS=20` run. Set `ODB_MM_MIX_MAX_STEPS=0` for a
+full pass and `ODB_MM_MIX_NUM_PROCESSES=8` for an 8-GPU run:
+
+```bash
+ODB_MM_MIX_MAX_STEPS=0 ODB_MM_MIX_NUM_PROCESSES=8 ./run.sh odb-enable
+```
+
+The underlying training script is
+`scripts/train_hf_trainer_real_processor.py`. It intentionally supports two
+ODB integration modes:
+
+| Mode | Command | What it demonstrates |
+| --- | --- | --- |
+| One-call hook | `./run.sh odb-enable` | Recommended `enable_odb(...)` entrypoint for ODB-ready HF Trainer pipelines. |
+| Manual bridge | `./run.sh odb-manual` | Lower-level `odb.apply(...)` plus `configure_trainer(...)`, useful when you want explicit control over the DataLoader handle. |
+
 It consumes the shared public MM-Mix TMDB recipe from
 [odb-mm-mix-example](https://github.com/online-dynamic-batching/odb-mm-mix-example)
 and demonstrates the native Trainer hook:
@@ -112,16 +147,7 @@ prefix training.
 Real processor path with ODB:
 
 ```bash
-python scripts/train_hf_trainer_real_processor.py \
-  --data data/mm-mix-tmdb \
-  --model Qwen/Qwen2.5-VL-3B-Instruct \
-  --loader odb \
-  --split-mode lf_val_size \
-  --val-size 0.05 \
-  --split-seed 42 \
-  --token-budget 8192 \
-  --image-max-pixels 589824 \
-  --max-steps 20
+./run.sh odb-enable
 ```
 
 The ODB branch uses the high-level HF integration entry point:
@@ -133,25 +159,26 @@ enable_odb(
     trainer,
     train_dataloader=train_loader,
     train_dataset=dataset,
-    token_budget=8192,
+    token_budget=12288,
     loss_scaling="exact",
     join=True,
 )
 ```
 
+For the explicit lower-level path:
+
+```bash
+./run.sh odb-manual
+```
+
+That path calls `odb.apply(...)` on the DataLoader and then
+`configure_trainer(...)` on the Trainer. It is kept as an advanced integration
+mode, not as the default recommendation.
+
 Run Standard with the same inputs:
 
 ```bash
-python scripts/train_hf_trainer_real_processor.py \
-  --data data/mm-mix-tmdb \
-  --model Qwen/Qwen2.5-VL-3B-Instruct \
-  --loader standard \
-  --split-mode lf_val_size \
-  --val-size 0.05 \
-  --split-seed 42 \
-  --fixed-batch-size 1 \
-  --image-max-pixels 589824 \
-  --max-steps 20
+./run.sh standard
 ```
 
 For longer validation runs that will be evaluated afterwards, pass
