@@ -136,7 +136,7 @@ Both runs train over the same 196,200 examples and evaluate on the same 10,326
 held-out examples. The detailed machine-readable record is in
 [`results/h20_qwen3vl2b_full_lfsplit_20260625.json`](results/h20_qwen3vl2b_full_lfsplit_20260625.json).
 
-## Run Real Processor Training
+## Training
 
 For strict train/eval accounting, use the same deterministic split policy for
 training and validation loss. The LLaMA-Factory-compatible policy is:
@@ -149,13 +149,7 @@ train = permutation[val_size:]
 eval = permutation[:val_size]
 ```
 
-The older prefix mode (`--split-mode prefix --train-size N`) is useful for
-quick debugging, but then validation must use a held-out tail range. Do not
-evaluate a prefix-trained checkpoint on `lf_val_size` and call it held-out
-validation loss, because most `lf_val_size` examples were already seen during
-prefix training.
-
-Real processor path with ODB:
+Train with ODB:
 
 ```bash
 ./run.sh odb-enable
