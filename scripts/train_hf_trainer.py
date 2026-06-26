@@ -21,6 +21,9 @@ from transformers import AutoProcessor, TrainingArguments
 
 from hf_mm_utils import make_model_collator
 
+ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_DEEPSPEED_CONFIG = ROOT / "configs" / "ds_z2.json"
+
 
 def count_records(path: Path) -> int:
     metadata = path / "metadata.json"
@@ -161,7 +164,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max-length",
         type=int,
-        default=int(os.getenv("ODB_MM_MIX_MAX_LENGTH", "2048")),
+        default=int(os.getenv("ODB_MM_MIX_MAX_LENGTH", "16384")),
     )
     parser.add_argument(
         "--train-size", type=int, default=int(os.getenv("ODB_MM_MIX_TRAIN_SIZE", "0"))
@@ -169,7 +172,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--split-mode",
         choices=["prefix", "lf_val_size"],
-        default=os.getenv("ODB_MM_MIX_SPLIT_MODE", "prefix"),
+        default=os.getenv("ODB_MM_MIX_SPLIT_MODE", "lf_val_size"),
         help="Training split. `lf_val_size` matches LLaMA-Factory TMDB val_size splitting and trains on the complement.",
     )
     parser.add_argument(
@@ -187,7 +190,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--image-max-pixels",
         type=int,
-        default=int(os.getenv("ODB_MM_MIX_IMAGE_MAX_PIXELS", "589824")),
+        default=int(os.getenv("ODB_MM_MIX_IMAGE_MAX_PIXELS", "9437184")),
         help="Downscale images above this pixel budget before Qwen-VL vision-token expansion; set 0 to disable.",
     )
     parser.add_argument(
@@ -201,7 +204,7 @@ def parse_args() -> argparse.Namespace:
             "hf",
             "processor",
         ],
-        default=os.getenv("ODB_MM_MIX_PROCESSOR_BACKEND", "auto"),
+        default=os.getenv("ODB_MM_MIX_PROCESSOR_BACKEND", "qwen_vl"),
         help="Runtime multimodal processor path. 'auto' uses the Qwen-VL LLaMA-Factory-style path when available.",
     )
     parser.add_argument(
@@ -218,7 +221,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--prefetch-factor",
         type=int,
-        default=int(os.getenv("ODB_MM_MIX_PREFETCH_FACTOR", "128")),
+        default=None,
+    )
+    parser.add_argument(
+        "--odb-prefetch-factor",
+        type=int,
+        default=int(os.getenv("ODB_MM_MIX_ODB_PREFETCH_FACTOR", "512")),
+    )
+    parser.add_argument(
+        "--standard-prefetch-factor",
+        type=int,
+        default=int(os.getenv("ODB_MM_MIX_STANDARD_PREFETCH_FACTOR", "2")),
     )
     parser.add_argument(
         "--lr", type=float, default=float(os.getenv("ODB_MM_MIX_LR", "1e-5"))
@@ -240,11 +253,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--seed", type=int, default=int(os.getenv("ODB_MM_MIX_SEED", "42"))
     )
-    parser.add_argument("--deepspeed", default=os.getenv("ODB_MM_MIX_DEEPSPEED"))
+    parser.add_argument(
+        "--deepspeed",
+        default=os.getenv(
+            "ODB_MM_MIX_DEEPSPEED",
+            str(DEFAULT_DEEPSPEED_CONFIG)
+            if DEFAULT_DEEPSPEED_CONFIG.exists()
+            else None,
+        ),
+    )
     parser.add_argument(
         "--gradient-checkpointing",
         action=argparse.BooleanOptionalAction,
-        default=os.getenv("ODB_MM_MIX_GRADIENT_CHECKPOINTING", "1").lower()
+        default=os.getenv("ODB_MM_MIX_GRADIENT_CHECKPOINTING", "0").lower()
         in {"1", "true", "yes", "y"},
     )
     parser.add_argument("--join", action=argparse.BooleanOptionalAction, default=True)
@@ -275,10 +296,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--logging-steps", type=int, default=10)
     parser.add_argument(
         "--trainable-keywords",
-        default=os.getenv("ODB_MM_MIX_TRAINABLE_KEYWORDS", "norm,merger"),
+        default=os.getenv("ODB_MM_MIX_TRAINABLE_KEYWORDS", "full"),
         help="Comma-separated parameter-name fragments to train; use 'full' for full fine-tuning.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.prefetch_factor is None:
+        env_prefetch = os.getenv("ODB_MM_MIX_PREFETCH_FACTOR")
+        if env_prefetch:
+            args.prefetch_factor = int(env_prefetch)
+        elif args.loader == "odb":
+            args.prefetch_factor = args.odb_prefetch_factor
+        else:
+            args.prefetch_factor = args.standard_prefetch_factor
+    return args
 
 
 def make_training_args(args: argparse.Namespace) -> TrainingArguments:
@@ -306,6 +336,7 @@ def make_training_args(args: argparse.Namespace) -> TrainingArguments:
         "max_grad_norm": args.max_grad_norm,
         "deepspeed": args.deepspeed,
         "gradient_checkpointing": args.gradient_checkpointing,
+        "ddp_timeout": int(os.getenv("ODB_MM_MIX_DDP_TIMEOUT", "180000000")),
     }
     return TrainingArguments(**{k: v for k, v in common.items() if v is not None})
 
@@ -438,6 +469,23 @@ def write_training_outputs(
         "trainer_metrics": final_metrics,
         "world_size": int(world_size),
         "split": getattr(args, "split_info", None),
+        "config": {
+            "max_length": args.max_length,
+            "image_max_pixels": args.image_max_pixels,
+            "processor_backend": args.processor_backend,
+            "num_workers": args.num_workers,
+            "prefetch_factor": args.prefetch_factor,
+            "fixed_batch_size": args.fixed_batch_size
+            if args.loader == "standard"
+            else None,
+            "token_budget": args.token_budget if args.loader == "odb" else None,
+            "buffer_size": args.buffer_size if args.loader == "odb" else None,
+            "loss_scaling": args.loss_scaling if args.loader == "odb" else None,
+            "join": args.join if args.loader == "odb" else None,
+            "deepspeed": args.deepspeed,
+            "gradient_checkpointing": args.gradient_checkpointing,
+            "trainable_keywords": args.trainable_keywords,
+        },
     }
     summary_path = Path(args.output_dir) / f"train_summary_{args.loader}.json"
     summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")

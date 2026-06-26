@@ -27,9 +27,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--checkpoint", default=os.getenv("ODB_HF_EVAL_CHECKPOINT"))
     parser.add_argument(
         "--data",
-        default=os.getenv(
-            "ODB_MM_MIX_DATA", "/data/goodli/datasets/odb_mm_mix_public_full_20260621"
-        ),
+        default=os.getenv("ODB_MM_MIX_DATA", "data/mm-mix-tmdb"),
     )
     parser.add_argument("--output-dir", default=os.getenv("ODB_HF_EVAL_SAVE_DIR"))
     parser.add_argument(
@@ -40,7 +38,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--split-mode",
         choices=["tail", "lf_val_size"],
-        default=os.getenv("ODB_HF_EVAL_SPLIT_MODE", "tail"),
+        default=os.getenv("ODB_HF_EVAL_SPLIT_MODE", "lf_val_size"),
         help="Validation split. `lf_val_size` matches LLaMA-Factory TMDB val_size splitting.",
     )
     parser.add_argument(
@@ -68,7 +66,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--image-max-pixels",
         type=int,
-        default=int(os.getenv("ODB_MM_MIX_IMAGE_MAX_PIXELS", "589824")),
+        default=int(os.getenv("ODB_MM_MIX_IMAGE_MAX_PIXELS", "9437184")),
     )
     parser.add_argument(
         "--processor-backend",

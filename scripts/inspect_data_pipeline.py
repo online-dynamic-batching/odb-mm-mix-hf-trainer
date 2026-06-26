@@ -30,12 +30,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max-length",
         type=int,
-        default=int(os.getenv("ODB_MM_MIX_MAX_LENGTH", "4096")),
+        default=int(os.getenv("ODB_MM_MIX_MAX_LENGTH", "16384")),
     )
     parser.add_argument(
         "--image-max-pixels",
         type=int,
-        default=int(os.getenv("ODB_MM_MIX_IMAGE_MAX_PIXELS", "589824")),
+        default=int(os.getenv("ODB_MM_MIX_IMAGE_MAX_PIXELS", "9437184")),
     )
     parser.add_argument("--num-samples", type=int, default=16)
     parser.add_argument("--output", default=os.getenv("ODB_MM_MIX_INSPECT_OUTPUT"))

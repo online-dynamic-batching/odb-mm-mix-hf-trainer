@@ -14,10 +14,14 @@ EVAL_CHECKPOINT="${ODB_HF_EVAL_CHECKPOINT:-${OUTPUT_ROOT}/odb-enable}"
 EVAL_OUTPUT_ROOT="${ODB_HF_EVAL_OUTPUT_ROOT:-${EVAL_CHECKPOINT}}"
 MAX_STEPS="${ODB_MM_MIX_MAX_STEPS:-20}"
 MAX_LENGTH="${ODB_MM_MIX_MAX_LENGTH:-16384}"
-IMAGE_MAX_PIXELS="${ODB_MM_MIX_IMAGE_MAX_PIXELS:-589824}"
+IMAGE_MAX_PIXELS="${ODB_MM_MIX_IMAGE_MAX_PIXELS:-9437184}"
 TOKEN_BUDGET="${ODB_MM_MIX_TOKEN_BUDGET:-12288}"
 BUFFER_SIZE="${ODB_MM_MIX_BUFFER_SIZE:-1024}"
 NUM_PROCESSES="${ODB_MM_MIX_NUM_PROCESSES:-1}"
+ODB_PREFETCH_FACTOR="${ODB_MM_MIX_ODB_PREFETCH_FACTOR:-512}"
+STANDARD_PREFETCH_FACTOR="${ODB_MM_MIX_STANDARD_PREFETCH_FACTOR:-2}"
+TRAINABLE_KEYWORDS="${ODB_MM_MIX_TRAINABLE_KEYWORDS:-full}"
+DEEPSPEED="${ODB_MM_MIX_DEEPSPEED:-configs/ds_z2.json}"
 
 COMMON_ARGS=(
   --data "${DATA}"
@@ -28,7 +32,12 @@ COMMON_ARGS=(
   --max-length "${MAX_LENGTH}"
   --image-max-pixels "${IMAGE_MAX_PIXELS}"
   --max-steps "${MAX_STEPS}"
+  --trainable-keywords "${TRAINABLE_KEYWORDS}"
 )
+
+if [[ -n "${DEEPSPEED}" ]]; then
+  COMMON_ARGS+=(--deepspeed "${DEEPSPEED}")
+fi
 
 run_train() {
   local loader="$1"
@@ -46,11 +55,15 @@ run_train() {
       --odb-integration "${integration}"
       --token-budget "${TOKEN_BUDGET}"
       --buffer-size "${BUFFER_SIZE}"
+      --prefetch-factor "${ODB_PREFETCH_FACTOR}"
       --loss-scaling exact
       --join
     )
   else
-    cmd+=(--fixed-batch-size 1)
+    cmd+=(
+      --fixed-batch-size 1
+      --prefetch-factor "${STANDARD_PREFETCH_FACTOR}"
+    )
   fi
 
   if [[ "${NUM_PROCESSES}" != "1" ]]; then
@@ -113,6 +126,11 @@ Useful environment variables:
   ODB_MM_MIX_MODEL=Qwen/Qwen3-VL-2B-Instruct
   ODB_MM_MIX_MAX_STEPS=20
   ODB_MM_MIX_NUM_PROCESSES=8
+  ODB_MM_MIX_IMAGE_MAX_PIXELS=9437184
+  ODB_MM_MIX_ODB_PREFETCH_FACTOR=512
+  ODB_MM_MIX_STANDARD_PREFETCH_FACTOR=2
+  ODB_MM_MIX_TRAINABLE_KEYWORDS=full
+  ODB_MM_MIX_DEEPSPEED=configs/ds_z2.json
   ODB_HF_EVAL_CHECKPOINT=outputs/hf-trainer-real/odb-enable
 EOF
     ;;

@@ -33,8 +33,9 @@ which file under `scripts/` starts training.
 
 `run.sh` defaults to `Qwen/Qwen3-VL-2B-Instruct`, the public MM-Mix TMDB under
 `data/mm-mix-tmdb`, `split_mode=lf_val_size`, `val_size=0.05`, `split_seed=42`,
-and a short `ODB_MM_MIX_MAX_STEPS=20` run. Set `ODB_MM_MIX_MAX_STEPS=0` for a
-full pass and `ODB_MM_MIX_NUM_PROCESSES=8` for an 8-GPU run:
+`image_max_pixels=9437184`, full fine-tuning, Deepspeed ZeRO-2, and a short
+`ODB_MM_MIX_MAX_STEPS=20` run. Set `ODB_MM_MIX_MAX_STEPS=0` for a full pass and
+`ODB_MM_MIX_NUM_PROCESSES=8` for an 8-GPU run:
 
 ```bash
 ODB_MM_MIX_MAX_STEPS=0 ODB_MM_MIX_NUM_PROCESSES=8 ./run.sh odb-enable
@@ -101,7 +102,7 @@ real multimodal tensors and sane labels:
 python scripts/inspect_data_pipeline.py \
   --data data/mm-mix-tmdb \
   --model Qwen/Qwen3-VL-2B-Instruct \
-  --image-max-pixels 589824 \
+  --image-max-pixels 9437184 \
   --num-samples 16
 ```
 
@@ -112,9 +113,8 @@ training; it does not pre-load the full record table.
 
 The Qwen-VL native processor path downsizes images above `--image-max-pixels`
 before expanding visual placeholders into model tokens. The default is
-`589824` pixels (`768 x 768`), which prevents very large source images from
-filling the text cutoff with visual tokens. Set it to `0` only when you have a
-separate image-size policy.
+`9437184` pixels (`3072 x 3072`), matching the LLaMA-Factory MM-Mix reference.
+Set it to `0` only when you have a separate image-size policy.
 
 ## Current Validation Status
 
@@ -124,8 +124,10 @@ datasets and a full-epoch public MM-Mix H20 run using
 not a paper-aligned LLaMA-Factory reproduction, so use the LLaMA-Factory
 MM-Mix reference project when you need the paper-style training stack.
 
-Full-epoch validation on one 8-GPU H20 node with Qwen3-VL-2B-Instruct,
-`split_mode=lf_val_size`, `val_size=0.05`, and `split_seed=42`:
+The table below is the previous full-epoch validation before switching the HF
+example to the LLaMA-Factory-aligned `image_max_pixels=9437184` default. A new
+LF-aligned validation should replace it before using these numbers as headline
+results.
 
 | Loader | Samples/s | Speedup | Runtime | Steps | Samples/step | Val loss | Token-weighted val loss | MMMU-MC |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
