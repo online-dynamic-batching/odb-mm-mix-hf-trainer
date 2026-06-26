@@ -52,10 +52,10 @@ The public scripts are intentionally named by role:
 
 | Script | Purpose |
 | --- | --- |
-| `scripts/train_hf_trainer.py` | Real HF Trainer multimodal training. |
-| `scripts/eval_valloss.py` | Validation loss on the same lazy HF-direct processor path. |
-| `scripts/eval_benchmark.py` | Built-in MMMU-MC choice-likelihood benchmark evaluator. |
-| `scripts/inspect_data_pipeline.py` | Pre-training check for multimodal tensor output and label masking. |
+| `scripts/train_hf_trainer.py` | Train the model with HF Trainer. |
+| `scripts/eval_valloss.py` | Compute validation loss for a saved model. |
+| `scripts/eval_benchmark.py` | Run MMMU-MC benchmark evaluation. |
+| `scripts/inspect_data_pipeline.py` | Check multimodal tensor output before training. |
 
 The training script intentionally supports two ODB integration modes:
 
