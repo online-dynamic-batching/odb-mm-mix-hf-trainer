@@ -43,6 +43,7 @@ fi
 run_train() {
   local loader="$1"
   local integration="${2:-enable}"
+  shift 2
   local output_dir="${OUTPUT_ROOT}/${loader}-${integration}"
   local cmd=(
     scripts/train_hf_trainer.py
