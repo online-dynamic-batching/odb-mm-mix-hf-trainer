@@ -485,6 +485,9 @@ def write_training_outputs(
             "join": args.join if args.loader == "odb" else None,
             "deepspeed": args.deepspeed,
             "gradient_checkpointing": args.gradient_checkpointing,
+            "use_cache": getattr(
+                getattr(trainer.model, "config", None), "use_cache", None
+            ),
             "trainable_keywords": args.trainable_keywords,
         },
     }
@@ -519,6 +522,8 @@ def main() -> None:
     model = load_model(
         args.model, trust_remote_code=args.trust_remote_code, dtype=dtype
     )
+    if hasattr(model, "config"):
+        model.config.use_cache = False
     if args.gradient_checkpointing:
         try:
             model.gradient_checkpointing_enable()
@@ -607,6 +612,7 @@ def main() -> None:
                 "processor_backend": args.processor_backend,
                 "deepspeed": args.deepspeed,
                 "gradient_checkpointing": args.gradient_checkpointing,
+                "use_cache": getattr(getattr(model, "config", None), "use_cache", None),
                 "max_steps": args.max_steps,
                 "effective_max_steps": args.max_steps if args.max_steps > 0 else -1,
                 "odb_integration": args.odb_integration
