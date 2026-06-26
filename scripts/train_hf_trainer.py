@@ -190,7 +190,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--image-max-pixels",
         type=int,
-        default=int(os.getenv("ODB_MM_MIX_IMAGE_MAX_PIXELS", "9437184")),
+        default=int(os.getenv("ODB_MM_MIX_IMAGE_MAX_PIXELS", "589824")),
         help="Downscale images above this pixel budget before Qwen-VL vision-token expansion; set 0 to disable.",
     )
     parser.add_argument(
@@ -265,7 +265,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--gradient-checkpointing",
         action=argparse.BooleanOptionalAction,
-        default=os.getenv("ODB_MM_MIX_GRADIENT_CHECKPOINTING", "0").lower()
+        default=os.getenv("ODB_MM_MIX_GRADIENT_CHECKPOINTING", "1").lower()
         in {"1", "true", "yes", "y"},
     )
     parser.add_argument("--join", action=argparse.BooleanOptionalAction, default=True)

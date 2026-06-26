@@ -1,4 +1,4 @@
-# ODB MM-Mix Hugging Face Trainer Example
+# ODB HF Trainer Example
 
 Experimental framework-native MM-Mix example for
 [Online Dynamic Batching](https://github.com/online-dynamic-batching/online-dynamic-batching)
@@ -33,9 +33,10 @@ which file under `scripts/` starts training.
 
 `run.sh` defaults to `Qwen/Qwen3-VL-2B-Instruct`, the public MM-Mix TMDB under
 `data/mm-mix-tmdb`, `split_mode=lf_val_size`, `val_size=0.05`, `split_seed=42`,
-`image_max_pixels=9437184`, full fine-tuning, Deepspeed ZeRO-2, and a short
-`ODB_MM_MIX_MAX_STEPS=20` run. Set `ODB_MM_MIX_MAX_STEPS=-1` for a full pass and
-`ODB_MM_MIX_NUM_PROCESSES=8` for an 8-GPU run:
+`image_max_pixels=589824`, gradient checkpointing enabled, full fine-tuning,
+Deepspeed ZeRO-2, and a short `ODB_MM_MIX_MAX_STEPS=20` run. Set
+`ODB_MM_MIX_MAX_STEPS=-1` for a full pass and `ODB_MM_MIX_NUM_PROCESSES=8` for
+an 8-GPU run:
 
 ```bash
 ODB_MM_MIX_MAX_STEPS=-1 ODB_MM_MIX_NUM_PROCESSES=8 ./run.sh odb-enable
@@ -102,7 +103,7 @@ real multimodal tensors and sane labels:
 python scripts/inspect_data_pipeline.py \
   --data data/mm-mix-tmdb \
   --model Qwen/Qwen3-VL-2B-Instruct \
-  --image-max-pixels 9437184 \
+  --image-max-pixels 589824 \
   --num-samples 16
 ```
 
@@ -113,29 +114,16 @@ training; it does not pre-load the full record table.
 
 The Qwen-VL native processor path downsizes images above `--image-max-pixels`
 before expanding visual placeholders into model tokens. The default is
-`9437184` pixels (`3072 x 3072`), matching the LLaMA-Factory MM-Mix reference.
-Set it to `0` only when you have a separate image-size policy.
+`589824` pixels (`768 x 768`), which keeps the example practical on common
+development GPUs. Set it to `0` only when you have a separate image-size
+policy.
 
-## Current Validation Status
+## Validation Artifacts
 
-The ODB/HF Trainer adapter contract is validated with ODB-ready tensor
-datasets and a full-epoch public MM-Mix H20 run using
-`online-dynamic-batching==0.1.2`. This is a framework-native HF processor path,
-not a paper-aligned LLaMA-Factory reproduction, so use the LLaMA-Factory
-MM-Mix reference project when you need the paper-style training stack.
-
-The table below is the previous full-epoch validation before switching the HF
-example to the LLaMA-Factory-aligned `image_max_pixels=9437184` default. A new
-LF-aligned validation should replace it before using these numbers as headline
-results.
-
-| Loader | Samples/s | Speedup | Runtime | Steps | Samples/step | Val loss | Token-weighted val loss | MMMU-MC |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Standard | 18.92 | 1.00x | 10367.6s | 24525 | 8.0 | 1.0363 | 1.2107 | 43.41 |
-| ODB | 50.53 | 2.67x | 3882.7s | 1278 | 153.5 | 1.0302 | 1.2075 | 48.35 |
-
-Both runs train over the same 196,200 examples and evaluate on the same 10,326
-held-out examples. The detailed machine-readable record is in
+Machine-readable validation records are kept under [results/](results/) for
+reproducibility checks. They are intended to help users confirm the example
+pipeline, not to serve as cross-framework benchmark claims. The detailed
+full-epoch validation record for the default small-image configuration is in
 [`results/h20_qwen3vl2b_full_lfsplit_20260625.json`](results/h20_qwen3vl2b_full_lfsplit_20260625.json).
 
 ## Training
