@@ -34,11 +34,11 @@ which file under `scripts/` starts training.
 `run.sh` defaults to `Qwen/Qwen3-VL-2B-Instruct`, the public MM-Mix TMDB under
 `data/mm-mix-tmdb`, `split_mode=lf_val_size`, `val_size=0.05`, `split_seed=42`,
 `image_max_pixels=9437184`, full fine-tuning, Deepspeed ZeRO-2, and a short
-`ODB_MM_MIX_MAX_STEPS=20` run. Set `ODB_MM_MIX_MAX_STEPS=0` for a full pass and
+`ODB_MM_MIX_MAX_STEPS=20` run. Set `ODB_MM_MIX_MAX_STEPS=-1` for a full pass and
 `ODB_MM_MIX_NUM_PROCESSES=8` for an 8-GPU run:
 
 ```bash
-ODB_MM_MIX_MAX_STEPS=0 ODB_MM_MIX_NUM_PROCESSES=8 ./run.sh odb-enable
+ODB_MM_MIX_MAX_STEPS=-1 ODB_MM_MIX_NUM_PROCESSES=8 ./run.sh odb-enable
 ```
 
 The public scripts are intentionally named by role:

@@ -312,6 +312,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def make_training_args(args: argparse.Namespace) -> TrainingArguments:
+    normalized_max_steps = args.max_steps if args.max_steps > 0 else -1
     common: dict[str, Any] = {
         "output_dir": args.output_dir,
         "per_device_train_batch_size": 1
@@ -323,7 +324,7 @@ def make_training_args(args: argparse.Namespace) -> TrainingArguments:
         else None,
         "learning_rate": args.lr,
         "num_train_epochs": args.num_train_epochs,
-        "max_steps": args.max_steps,
+        "max_steps": normalized_max_steps,
         "save_strategy": args.save_strategy,
         "report_to": [],
         "remove_unused_columns": False,
@@ -607,6 +608,7 @@ def main() -> None:
                 "deepspeed": args.deepspeed,
                 "gradient_checkpointing": args.gradient_checkpointing,
                 "max_steps": args.max_steps,
+                "effective_max_steps": args.max_steps if args.max_steps > 0 else -1,
                 "odb_integration": args.odb_integration
                 if args.loader == "odb"
                 else None,

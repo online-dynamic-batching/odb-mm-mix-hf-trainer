@@ -126,7 +126,7 @@ Modes:
 Useful environment variables:
   ODB_MM_MIX_DATA=data/mm-mix-tmdb
   ODB_MM_MIX_MODEL=Qwen/Qwen3-VL-2B-Instruct
-  ODB_MM_MIX_MAX_STEPS=20
+  ODB_MM_MIX_MAX_STEPS=20        # set to -1 for a full-epoch run
   ODB_MM_MIX_NUM_PROCESSES=8
   ODB_MM_MIX_IMAGE_MAX_PIXELS=9437184
   ODB_MM_MIX_ODB_PREFETCH_FACTOR=512
