@@ -194,6 +194,13 @@ grouping, then call `enable_odb(...)` on the Trainer and DataLoader.
 
 ## Evaluate Saved Checkpoints
 
+Set `ODB_MM_MIX_SAVE_FINAL_MODEL=1` during training before running either
+validation-loss or benchmark evaluation. By default `run.sh` evaluates
+`outputs/hf-trainer-real/odb-enable`; set `ODB_HF_EVAL_CHECKPOINT` to evaluate a
+different saved model directory.
+
+### Validation Loss
+
 Validation loss uses the same lazy HF-direct processor path as training. Use
 `lf_val_size` only for checkpoints trained with the matching split:
 
@@ -211,6 +218,15 @@ The output JSON includes `eval_indices_preview`, `label_tokens`,
 `label_tokens_per_sample`, and `token_weighted_eval_loss` so you can audit
 whether the validation split and label mask are comparable across runs.
 
+The same evaluation can be launched through the root entrypoint:
+
+```bash
+ODB_HF_EVAL_CHECKPOINT=outputs/hf-trainer-real/odb-enable \
+./run.sh eval-valloss
+```
+
+### Benchmark Evaluation
+
 MMMU-MC evaluation is provided by this repository. It loads the public
 `MMMU/MMMU` validation split with `datasets`, scores answer letters A-H by
 next-token likelihood, and writes `mmmu_mc_likelihood_results.json`,
@@ -220,6 +236,28 @@ next-token likelihood, and writes `mmmu_mc_likelihood_results.json`,
 ODB_HF_EVAL_CHECKPOINT=outputs/hf-trainer-real/odb-enable \
 ./run.sh benchmark
 ```
+
+Or call the evaluator directly:
+
+```bash
+python scripts/eval_benchmark.py \
+  --checkpoint outputs/hf-trainer-real/odb-enable \
+  --output-dir outputs/hf-trainer-real/odb-enable/mmmu_mc_likelihood_hf \
+  --dataset MMMU/MMMU \
+  --split validation
+```
+
+Useful benchmark options:
+
+- `--subjects Accounting,Math,Physics` evaluates a subset of MMMU subjects.
+- `--max-samples 100` runs a quick smoke test before the full benchmark.
+- `--cache-dir /path/to/hf_cache` controls where Hugging Face datasets are
+  cached.
+- `--torch-dtype bf16` is the default GPU evaluation dtype.
+
+The main result is `overall_accuracy` in
+`mmmu_mc_likelihood_results.json`. Use `score_audit.json` to inspect candidate
+letter tokenization, and `excluded.jsonl` to audit filtered MMMU rows.
 
 To evaluate another mode, point `ODB_HF_EVAL_CHECKPOINT` at that saved model
 directory, for example `outputs/hf-trainer-real/standard-none` or
