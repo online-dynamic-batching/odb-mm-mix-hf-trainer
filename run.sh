@@ -22,6 +22,7 @@ ODB_PREFETCH_FACTOR="${ODB_MM_MIX_ODB_PREFETCH_FACTOR:-512}"
 STANDARD_PREFETCH_FACTOR="${ODB_MM_MIX_STANDARD_PREFETCH_FACTOR:-2}"
 TRAINABLE_KEYWORDS="${ODB_MM_MIX_TRAINABLE_KEYWORDS:-full}"
 DEEPSPEED="${ODB_MM_MIX_DEEPSPEED:-configs/ds_z2.json}"
+PYTHON_BIN="${PYTHON:-python}"
 
 COMMON_ARGS=(
   --data "${DATA}"
@@ -44,7 +45,7 @@ run_train() {
   local integration="${2:-enable}"
   local output_dir="${OUTPUT_ROOT}/${loader}-${integration}"
   local cmd=(
-    python scripts/train_hf_trainer.py
+    scripts/train_hf_trainer.py
     "${COMMON_ARGS[@]}"
     --loader "${loader}"
     --output-dir "${output_dir}"
@@ -67,9 +68,9 @@ run_train() {
   fi
 
   if [[ "${NUM_PROCESSES}" != "1" ]]; then
-    torchrun --nproc_per_node="${NUM_PROCESSES}" "${cmd[@]}" "$@"
+    "${PYTHON_BIN}" -m torch.distributed.run --nproc_per_node="${NUM_PROCESSES}" "${cmd[@]}" "$@"
   else
-    "${cmd[@]}" "$@"
+    "${PYTHON_BIN}" "${cmd[@]}" "$@"
   fi
 }
 
@@ -84,14 +85,14 @@ case "${MODE}" in
     run_train standard none "$@"
     ;;
   inspect)
-    python scripts/inspect_data_pipeline.py \
+    "${PYTHON_BIN}" scripts/inspect_data_pipeline.py \
       --data "${DATA}" \
       --model "${MODEL}" \
       --image-max-pixels "${IMAGE_MAX_PIXELS}" \
       "$@"
     ;;
   eval-valloss|valloss)
-    python scripts/eval_valloss.py \
+    "${PYTHON_BIN}" scripts/eval_valloss.py \
       --checkpoint "${EVAL_CHECKPOINT}" \
       --data "${DATA}" \
       --output-dir "${EVAL_OUTPUT_ROOT}/eval_out_hf_valloss" \
@@ -103,7 +104,7 @@ case "${MODE}" in
       "$@"
     ;;
   eval-benchmark|benchmark)
-    python scripts/eval_benchmark.py \
+    "${PYTHON_BIN}" scripts/eval_benchmark.py \
       --checkpoint "${EVAL_CHECKPOINT}" \
       --output-dir "${EVAL_OUTPUT_ROOT}/mmmu_mc_likelihood_hf" \
       "$@"
