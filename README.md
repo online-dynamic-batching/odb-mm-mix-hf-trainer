@@ -26,7 +26,10 @@ which file under `scripts/` starts training.
 # Fixed-batch baseline
 ./run.sh standard
 
-# Evaluate a saved checkpoint
+# Save a checkpoint when you plan to evaluate afterwards
+ODB_MM_MIX_SAVE_FINAL_MODEL=1 ./run.sh odb-enable
+
+# Evaluate the saved checkpoint
 ./run.sh eval-valloss
 ./run.sh benchmark
 ```
@@ -39,8 +42,11 @@ Deepspeed ZeRO-2, and a short `ODB_MM_MIX_MAX_STEPS=20` run. Set
 an 8-GPU run:
 
 ```bash
-ODB_MM_MIX_MAX_STEPS=-1 ODB_MM_MIX_NUM_PROCESSES=8 ./run.sh odb-enable
+ODB_MM_MIX_MAX_STEPS=-1 ODB_MM_MIX_NUM_PROCESSES=8 ODB_MM_MIX_SAVE_FINAL_MODEL=1 ./run.sh odb-enable
 ```
+
+Drop `ODB_MM_MIX_SAVE_FINAL_MODEL=1` when you only want a training smoke test
+and do not need validation or benchmark evaluation.
 
 The public scripts are intentionally named by role:
 
@@ -86,6 +92,8 @@ declares `odb_ready = True` after this contract is audited. `enable_odb(...)`
 rejects pipelines where raw text/images are still processed inside the collator.
 
 ## Prepare Data
+
+From this repository root:
 
 ```bash
 git clone https://github.com/online-dynamic-batching/odb-mm-mix-example.git
@@ -191,9 +199,9 @@ Validation loss uses the same lazy HF-direct processor path as training. Use
 
 ```bash
 python scripts/eval_valloss.py \
-  --checkpoint outputs/hf-trainer-real \
+  --checkpoint outputs/hf-trainer-real/odb-enable \
   --data data/mm-mix-tmdb \
-  --output-dir outputs/hf-trainer-real/eval_out_hf_valloss \
+  --output-dir outputs/hf-trainer-real/odb-enable/eval_out_hf_valloss \
   --split-mode lf_val_size \
   --val-size 0.05 \
   --split-seed 42
@@ -212,3 +220,7 @@ next-token likelihood, and writes `mmmu_mc_likelihood_results.json`,
 ODB_HF_EVAL_CHECKPOINT=outputs/hf-trainer-real/odb-enable \
 ./run.sh benchmark
 ```
+
+To evaluate another mode, point `ODB_HF_EVAL_CHECKPOINT` at that saved model
+directory, for example `outputs/hf-trainer-real/standard-none` or
+`outputs/hf-trainer-real/odb-manual`.

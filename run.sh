@@ -128,6 +128,7 @@ Useful environment variables:
   ODB_MM_MIX_MODEL=Qwen/Qwen3-VL-2B-Instruct
   ODB_MM_MIX_MAX_STEPS=20        # set to -1 for a full-epoch run
   ODB_MM_MIX_NUM_PROCESSES=8
+  ODB_MM_MIX_SAVE_FINAL_MODEL=1  # set when you plan to run eval-valloss/benchmark
   ODB_MM_MIX_IMAGE_MAX_PIXELS=589824
   ODB_MM_MIX_GRADIENT_CHECKPOINTING=1
   ODB_MM_MIX_ODB_PREFETCH_FACTOR=512
